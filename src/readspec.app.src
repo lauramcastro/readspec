@@ -1,0 +1,16 @@
+{application, readspec,
+ [
+  {description, "ReadSpec application: making PBT for web services easier for humans"},
+  {vsn, "1"},
+  {modules, [
+		readspec,
+		readspec_inspect
+	    ]},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { readspec_app, []}},
+  {env, []}
+ ]}.
