@@ -3,7 +3,7 @@ readspec
 
 ReadSpec application: making PBT easier to read for humans
 
-Compiling & running
+compiling & running
 -------------------
 
 Just clone the repository and execute
