@@ -7,10 +7,10 @@
 		is_call = false, is_arg = false, evaluated = false,
 		value = none}).
 -record(call_info, {name, num_args, pre_exp, next_exp, post_exp}).
--record(idiom, {name, repr = "", subs = []}).
 
 
 % API records
--record(exp_iface, {var_defs = [], conds = [], result = []}).
+-record(exp_iface, {var_defs = [], conds = [], result = [], idioms = []}).
 -record(call_iface, {name, num_args, pre_exp, next_exp, post_exp}).
 -record(module_iface, {state_fields = [], call_list = []}).
+-record(idiom, {name, repr = "", subs = []}).

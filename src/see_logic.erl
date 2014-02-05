@@ -666,7 +666,7 @@ write_in_terms_of(record_expr, Record, Var, Expansion) ->
     NamesVar = [list_to_atom("rec_elem_" ++ atom_to_list(RecordFieldName)
 			     ++ "_of__:" ++ atom_to_list(erl_syntax:variable_name(Var)))
 		|| RecordFieldName <- RecordFieldNames],
-    Applies = [{record, get_value, [RecordType, erl_syntax:atom(RecordFieldName), Var]}
+    Applies = [{'?RECORD', get_value, [RecordType, erl_syntax:atom(RecordFieldName), Var]}
 	       || RecordFieldName <- RecordFieldNames],
     ListElemVar = lists:zip3(RecordFieldValues, NamesVar, Applies),
     NewExpansion = add_cond(Expansion, {record_type, Var, RecordType}),

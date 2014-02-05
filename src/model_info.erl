@@ -17,9 +17,8 @@ model_info(FileName) ->
     Funcs = see_logic:get_funcs(FileName),
     {RecordName, RecordFields} = get_state_fields(FileName),
     WildcardRecord = make_wildcard_record({RecordName, RecordFields}),
-    RecordIdiomList = make_record_idiom_list(RecordFields),
     Transitions = get_transitions_and_args(Funcs, FileName, WildcardRecord),
-    expand_all_functions(Transitions, WildcardRecord, FileName, RecordIdiomList).
+    expand_all_functions(Transitions, WildcardRecord, FileName).
 
 ppr_callinfos([]) -> ok;
 ppr_callinfos([#call_info{
@@ -46,48 +45,38 @@ ppr_callinfos([#call_info{
 		    io:format("~n~n"),
 		    ppr_callinfos(Rest).
 
-expand_all_functions([], _, _, _) -> [];
-expand_all_functions([{Name, ArgNum}|Rest], WildcardRecord, FileName, RecordIdiomList) ->
+expand_all_functions([], _, _) -> [];
+expand_all_functions([{Name, ArgNum}|Rest], WildcardRecord, FileName) ->
     ArgList = erl_syntax:list(generate_arg_list(ArgNum)),
-    ArgIdiomList = generate_arg_idiom_list({Name, ArgNum}, ArgNum),
-    ARIdiomList = [res_idiom({Name, ArgNum})|ArgIdiomList] ++ RecordIdiomList,
     [#call_info{
 	name = Name, num_args = ArgNum,
 	pre_exp = encapsulated_generate_logical_function(
 		    pre,
 		    {concat_atoms(Name, '_pre'), 1},
-		    [WildcardRecord], FileName, WildcardRecord, ARIdiomList),
+		    [WildcardRecord], FileName, WildcardRecord),
 	next_exp = encapsulated_generate_logical_function(
 		     next,
 		     {concat_atoms(Name, '_next'), 3},
 		     [WildcardRecord,
 		      erl_syntax:variable(create_arg_name(result, result)),
 		      ArgList],
-		     FileName, WildcardRecord, ARIdiomList),
+		     FileName, WildcardRecord),
 	post_exp = encapsulated_generate_logical_function(
 		     post,
 		     {concat_atoms(Name, '_post'), 3},
 		     [WildcardRecord,
 		      ArgList,
 		      erl_syntax:variable(create_arg_name(result, result))],
-		     FileName, WildcardRecord, ARIdiomList)
-       }|expand_all_functions(Rest, WildcardRecord, FileName, RecordIdiomList)].
+		     FileName, WildcardRecord)
+       }|expand_all_functions(Rest, WildcardRecord, FileName)].
 
 concat_atoms(Atom1, Atom2) -> list_to_atom(atom_to_list(Atom1)
 					   ++ atom_to_list(Atom2)).
 
-encapsulated_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord, ARIdiomList) ->
-    add_arg_idioms(clean_nestcond:clean_expansions(
-		     dirty_generate_logical_function(FuncType, FuncName, Args,
-						     FileName, WildcardRecord)),
-		   ARIdiomList).
-
-add_arg_idioms([], _) -> [];
-add_arg_idioms([Expansion|Rest], List) ->
-    [add_arg_idioms_to_one(Expansion, List)|add_arg_idioms(Rest, List)].
-add_arg_idioms_to_one(Expansion, []) -> Expansion;
-add_arg_idioms_to_one(Expansion, [{Name, Repr, Subs}|Rest]) ->
-    add_arg_idioms_to_one(nestcond:add_idiom(Name, Repr, Subs, Expansion), Rest).
+encapsulated_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
+    clean_nestcond:clean_expansions(
+      dirty_generate_logical_function(FuncType, FuncName, Args,
+				      FileName, WildcardRecord)).
 
 dirty_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
     case 
@@ -112,35 +101,11 @@ make_exp_with_result(Result, FileName) ->
 	   [])),
       Result).
 
-res_idiom({Func, ArgNum}) ->
-    ResVarName = create_arg_name(result, result),
-    {ResVarName, "the result of calling " ++ func_str(Func, ArgNum), []}.
-
 generate_arg_list(0) -> [];
 generate_arg_list(ArgNum) ->
     [erl_syntax:variable(create_arg_name(arg, ArgNum))|
      generate_arg_list(ArgNum - 1)].
 
-generate_arg_idiom_list(_, 0) -> [];
-generate_arg_idiom_list({Func, ArgNum}, ArgNumLeft) ->
-    [begin
-	 ArgVarName = create_arg_name(arg, ArgNumLeft),
-	 {ArgVarName, "the " ++ ordinal_for(ArgNumLeft) ++
-	      " argument passed to " ++ func_str(Func, ArgNumLeft), []}
-     end
-     |generate_arg_idiom_list({Func, ArgNum}, ArgNumLeft - 1)].
-    
-
-ordinal_for(Number) ->
-    integer_to_list(Number) ++ ordinal_suffix(Number rem 10).
-ordinal_suffix(1) -> "st";
-ordinal_suffix(2) -> "nd";
-ordinal_suffix(3) -> "rd";
-ordinal_suffix(_) -> "th".
-
-
-func_str(Func, ArgNum) ->
-    atom_to_list(Func) ++ [$/|integer_to_list(ArgNum)].
 
 make_wildcard_record({RecordName, RecordFields}) ->
     erl_syntax:record_expr(
@@ -149,12 +114,6 @@ make_wildcard_record({RecordName, RecordFields}) ->
 	 erl_syntax:atom(FieldName),
 	 erl_syntax:variable(create_arg_name(state, FieldName)))
        || {FieldName, _} <- RecordFields]).
-
-make_record_idiom_list(RecordFields) ->
-    [begin
-	 FieldVarName = create_arg_name(state, FieldName),
-	 {FieldVarName, "the field called \"" ++ atom_to_list(FieldName) ++ "\"", []}
-     end || {FieldName, _} <- RecordFields].
 
 create_arg_name(result, result) -> '__ResultArgVar__';
 create_arg_name(state, Atom) ->

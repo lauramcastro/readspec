@@ -15,7 +15,7 @@
 	 scan_func_str_args_dbg/3, scan_model/1,
 	 get_arg_var_name/1, get_field_var_name/1,
 	 get_result_var_name/0, scan_and_print_model/1,
-	 print_exp_iface/1]).
+	 idiomize_model_info/1, print_model_info/1, print_exp_iface/1]).
 
 -include("records.hrl").
 
@@ -122,14 +122,38 @@ get_result_var_name() ->
     model_info:create_arg_name(result, result).
 
 %%% @doc
-%%% Does the same than {@link scan_model/1} but prints
-%%% the output nicely.
+%%% Extracts and prints nicely information from a model.
+%%% Is a combination of {@link scan_model/1},
+%%% {@link idiomize_model_info/1}, and
+%%% {@link print_model_info/1}).
 %%% @param FileName is an string or atom representing the
-%%% relative path to the source where the model is defined
+%%% relative path to the source where the model is defined.
 %%% @see scan_model/1
+%%% @see idiomize_model_infol/1
+%%% @see print_model_info/1
 -spec scan_and_print_model(atom() | string()) -> 'ok'.
 scan_and_print_model(FileName) ->
-    model_info:ppr_callinfos(model_info:model_info(FileName)).
+    Model = scan_model(FileName),
+    IdiomizedModel = idiomizer:idiomize_module_info(Model),
+    print_model_info(IdiomizedModel).
+
+%%% @doc
+%%% Adds information about idioms to a #module_iface{} record.
+%%% @param ModelInfo record with the information extracted
+%%% from a model.
+%%% @see scan_model/1
+-spec idiomize_model_info(ModelInfo::#module_iface{}) -> #module_iface{}.
+idiomize_model_info(ModelInfo) ->
+    idiomizer:idiomize_module_info(ModelInfo).
+
+%%% @doc
+%%% Prints a #module_iface{} record in a nicer way.
+%%% @param ModelInfo record with the information extracted
+%%% from a model.
+%%% @see scan_model/1
+-spec print_model_info(ModelInfo::#module_iface{}) -> 'ok'.
+print_model_info(ModelInfo) ->
+    model_info:ppr_callinfos(clutter_mif(ModelInfo)).
 
 %%% @doc
 %%% Prints an #exp_iface{} record or a list of them in
@@ -166,17 +190,19 @@ declutter_exp_list(List) when is_list(List) ->
 
 declutter_exp(#expansion{applys = VarDefs,
 			 conds = Conditions,
-			 result = Result}) ->
-    #exp_iface{var_defs = VarDefs, conds = Conditions, result = Result};
+			 result = Result,
+			 idioms = Idioms}) ->
+    #exp_iface{var_defs = VarDefs, conds = Conditions, result = Result, idioms = Idioms};
 declutter_exp(Error) -> Error.
 
 clutter_exp_list(List) when is_list(List) ->
     lists:map(fun clutter_exp/1, List).
 
-clutter_exp(#exp_iface{var_defs = VarDefs, conds = Conditions, result = Result}) ->
+clutter_exp(#exp_iface{var_defs = VarDefs, conds = Conditions, result = Result, idioms = Idioms}) ->
     #expansion{applys = VarDefs,
 	       conds = Conditions,
-	       result = Result}.
+	       result = Result,
+	       idioms = Idioms}.
 
 declutter_cif(#call_info{name = Name,
 			 num_args = NumArgs,
@@ -188,9 +214,21 @@ declutter_cif(#call_info{name = Name,
 		next_exp = declutter_exp_list(NextStateExpansion),
 		post_exp = declutter_exp_list(PostcondExpansion)}.
 
+clutter_cif(#call_iface{name = Name,
+			 num_args = NumArgs,
+			 pre_exp = PrecondExpansion,
+			 next_exp = NextStateExpansion,
+			 post_exp = PostcondExpansion}) ->
+    #call_info{name = Name, num_args = NumArgs,
+		pre_exp = clutter_exp_list(PrecondExpansion),
+		next_exp = clutter_exp_list(NextStateExpansion),
+		post_exp = clutter_exp_list(PostcondExpansion)}.
+
 declutter_mif(FileName, List) when is_list(List) ->		
     #module_iface{
        state_fields = model_info:get_state_fields(FileName),
        call_list = lists:map(fun declutter_cif/1, List)
       }.
 
+clutter_mif(#module_iface{call_list = CallList}) ->
+    lists:map(fun clutter_cif/1, CallList).

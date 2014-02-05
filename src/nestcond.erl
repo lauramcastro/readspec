@@ -262,6 +262,11 @@ add_idiom(Name, Repr, Subs, #expansion{idioms = Idioms} = Expansion) ->
     Expansion#expansion{idioms = [#idiom{name = Name,
 					 repr = Repr,
 					 subs = Subs}
+				  |Idioms]};
+add_idiom(Name, Repr, Subs, #exp_iface{idioms = Idioms} = Expansion) ->
+    Expansion#exp_iface{idioms = [#idiom{name = Name,
+					 repr = Repr,
+					 subs = Subs}
 				  |Idioms]}.
 
 replace_in_str([Head|Rest] = String, Ori, Dest) ->
