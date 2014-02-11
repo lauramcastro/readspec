@@ -7,7 +7,10 @@
 		is_call = false, is_arg = false, evaluated = false,
 		value = none}).
 -record(call_info, {name, num_args, pre_exp, next_exp, post_exp}).
-
+-record(rep, {rem_srcs, idiom_dict, idiom_ref, sec_dict,
+	      sec_ref, etd}).
+-record(etd, {matched_applies = sets:new(),
+	      idioms, in_ref}).
 
 % API records
 -record(exp_iface, {var_defs = [], conds = [], result = [], idioms = []}).

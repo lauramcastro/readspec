@@ -15,7 +15,8 @@
 	 touch_index/2, touch_index_n_times/3, get_result/1, get_context/1,
 	 set_context/2, new_context/1, recontext/2, ppr_expansions/1,
 	 add_record_definitions/2, get_record_definition/2, get_var_value/2,
-	 remove_apply_vars/2, get_var_values/2, remove_apply_var/2, add_idiom/4]).
+	 remove_apply_vars/2, get_var_values/2, remove_apply_var/2, add_idiom/4,
+	 create_idiom/3]).
 
 -include("records.hrl").
 
@@ -46,7 +47,11 @@ remove_apply_vars(Expansion, [VarName|Tail]) ->
 remove_apply_var(#expansion{applys = Applys} = Expansion, VarName) ->
     OtherApplies = [Apply || Apply <- Applys,
 			     Apply#apply.name =/= VarName],
-    Expansion#expansion{applys = OtherApplies}.
+    Expansion#expansion{applys = OtherApplies};
+remove_apply_var(#exp_iface{var_defs = Applys} = Expansion, VarName) ->
+    OtherApplies = [Apply || Apply <- Applys,
+			     Apply#apply.name =/= VarName],
+    Expansion#exp_iface{var_defs = OtherApplies}.
 
 mk_arg_apply(ArgName) -> #apply{name = ArgName, is_arg = true}.
 mk_var_apply(VarName, VarValue) -> #apply{name = VarName, evaluated = true,
@@ -153,7 +158,20 @@ recontext(#expansion{
       conds = [recontext_conds(Cond, {RenameAtom, RenameAST})
 	       || Cond <- Conds],
       result = RenameAST(Result)
+     };
+recontext(#exp_iface{
+	     var_defs = Applies, conds = Conds, result = Result
+	    }
+	  = Expansion,
+	  {RenameAtom, RenameAST}) ->
+    Expansion#exp_iface{
+      var_defs = [recontext_apply(Apply, {RenameAtom, RenameAST})
+		  || Apply <- Applies],
+      conds = [recontext_conds(Cond, {RenameAtom, RenameAST})
+	       || Cond <- Conds],
+      result = RenameAST(Result)
      }.
+
 
 recontext_apply(#apply{name = Name, arg_list = Args,
 		       evaluated = IsEval,
@@ -258,6 +276,11 @@ get_idiom(String, [{SubName, var_name, VarNameOrIdiom}|Rest], Idioms) ->
     lists:flatten(Subs),
     get_idiom(replace_in_str(String, SubName, Subs), Rest, Idioms).
 
+create_idiom(Name, Repr, Subs) ->
+    #idiom{name = Name,
+	   repr = Repr,
+	   subs = Subs}.
+
 add_idiom(Name, Repr, Subs, #expansion{idioms = Idioms} = Expansion) ->
     Expansion#expansion{idioms = [#idiom{name = Name,
 					 repr = Repr,
@@ -324,7 +347,17 @@ ppr_cond({record_type, RecordVar, Type}, Idioms) ->
     io:format("[*] ~s must contain a record of type \"~s\".~n~n",
 	      [first_cap(get_idiom_or_varname(erl_syntax:variable_name(RecordVar), Idioms)),
 	       erl_syntax:atom_value(Type)]),
+    ok;
+ppr_cond({{idiom, Text, Subs}}, Idioms) ->
+    ReplacedSubs = [case Sub of
+			{ast_var, Ast} -> get_idiom_or_varname(erl_syntax:variable_name(Ast), Idioms);
+			{literal, Literal} -> Literal;
+			{ast, Ast, N} -> explain_ast(Ast, Idioms, N)
+		    end || Sub <- Subs],
+    FinalText = io_lib:format(Text, ReplacedSubs),
+    io:format("[*] ~s.~n~n", [first_cap(FinalText)]),
     ok.
+
 
 first_cap(A) -> first_cap_aux(lists:flatten(A)).
 first_cap_aux([]) -> [];

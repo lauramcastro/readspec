@@ -8,8 +8,8 @@
 
 -module(see_logic).
 
--export([test/0, get_funcs/1, get_record_definitions/1, generate_logical_function/3, expand_function/3,
-	 renamers/2, test2/0, analyse/3, analyse_dbg/3, do_rename/2, parse_args/1]).
+-export([get_funcs/1, get_record_definitions/1, generate_logical_function/3, expand_function/3,
+	 renamers/2, do_rename/2, parse_args/1]).
 
 -import(nestcond, [make_expansion/0, set_result/2, add_arg_if_not_bound/2,
 		   set_func_patmatcha/2, set_case_patmatcha/2, clear_patmatcha/1,
@@ -23,18 +23,6 @@
 -include("records.hrl").
 
 
-analyse(File, Function, Args) ->
-    nestcond:ppr_expansions(
-      clean_nestcond:clean_expansions(
-	generate_logical_function({Function, length(Args)},
-				  parse_args(Args),
-				  File))).
-
-analyse_dbg(File, Function, Args) ->
-    nestcond:ppr_expansions(generate_logical_function({Function, length(Args)},
-						      parse_args(Args),
-						      File)).
-
 parse_args([]) -> [];
 parse_args([Arg|Rest]) ->
     [begin
@@ -47,21 +35,6 @@ parse_args([Arg|Rest]) ->
 	     Error -> throw({problem_extracting_tokens, Error, Arg})
 	 end
      end|parse_args(Rest)].
-
-test() ->
-    generate_logical_function({register_post, 3},
-			      [erl_syntax:variable('Arg_1'),
-			       erl_syntax:variable('Arg_2'),
-%			       erl_syntax:list([erl_syntax:variable('Arg_2_1'),
-%						erl_syntax:variable('Arg_2_2')]),
-			       erl_syntax:variable('Arg_3')],
-			      '../registry_eqc.erl').
-
-test2() ->
-    generate_logical_function({test, 2},
-			      [erl_syntax:variable('Arg_1'),
-			       erl_syntax:variable('Arg_2')],
-			      '../registry_eqc.erl').
 
 get_funcs(FileName) ->
     {ok, Parse} = epp:parse_file(FileName, [], []),
@@ -349,17 +322,10 @@ get_aux_vars(Number, OldExpansion) ->
 
 leave_level_as_is(Func, Expansion, IndexedSyntaxTree) ->
     ListOfLists = erl_syntax:subtrees(Func),
-    {List, Nums} = to_one_list(ListOfLists),
-    [set_result(Res, erl_syntax:update_tree(Func, remount_list(Nums, EList)))
+    {List, Nums} = utils:to_one_list(ListOfLists),
+    [set_result(Res, erl_syntax:update_tree(Func, utils:remount_list(Nums, EList)))
      || {EList, Res} <- expand_list_with_res(List, [Expansion], IndexedSyntaxTree)].
 
-to_one_list(ListOfLists) ->
-    {lists:append(ListOfLists), lists:map(fun erlang:length/1, ListOfLists)}.
-
-remount_list([], []) -> [];
-remount_list([Num|RestN], List) ->
-    {FirstPiece, SecondPiece} = lists:split(Num, List),
-    [FirstPiece|remount_list(RestN, SecondPiece)].
 
 translate_as_function(ModuleName, FunctionName, Arguments, Expansion, IndexedSyntaxTree) ->
     expand_function(erl_syntax:application(

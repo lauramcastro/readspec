@@ -74,9 +74,8 @@ concat_atoms(Atom1, Atom2) -> list_to_atom(atom_to_list(Atom1)
 					   ++ atom_to_list(Atom2)).
 
 encapsulated_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
-    clean_nestcond:clean_expansions(
-      dirty_generate_logical_function(FuncType, FuncName, Args,
-				      FileName, WildcardRecord)).
+    dirty_generate_logical_function(FuncType, FuncName, Args,
+				      FileName, WildcardRecord).
 
 dirty_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
     case 

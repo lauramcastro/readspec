@@ -43,7 +43,7 @@
 %%% be analysed.
 -spec scan_func(atom() | string(), atom(), [syntaxTree()]) -> [#exp_iface{} | {'not_expandable', _}].
 scan_func(FileName, FuncName, Args) ->
-    declutter_exp_list(scan_func_aux(FileName, FuncName, Args)).
+    clean_nestcond:clean_expansions(declutter_exp_list(scan_func_aux(FileName, FuncName, Args))).
 
 %%% @doc
 %%% Equivalent to {@link scan_func/3}, but it does not prune
@@ -59,7 +59,7 @@ scan_func_dbg(FileName, FuncName, Args) ->
 %%% @see scan_func/3
 -spec scan_func_str_args(atom() | string(), atom(), [string()]) -> [#exp_iface{} | {'not_expandable', _}].
 scan_func_str_args(FileName, FuncName, Args) ->
-    declutter_exp_list(scan_func_str_args_aux(FileName, FuncName, Args)).
+    clean_nestcond:clean_expansions(declutter_exp_list(scan_func_str_args_aux(FileName, FuncName, Args))).
 
 %%% @doc
 %%% Calls {@link scan_func_dbg/3}, but it takes strings as arguments
@@ -85,7 +85,8 @@ scan_func_str_args_dbg(FileName, FuncName, Args) ->
 %%% @see get_result_var_name/0
 -spec scan_model(atom() | string()) -> #module_iface{call_list::[#call_iface{pre_exp::[#exp_iface{}],next_exp::[#exp_iface{}],post_exp::[#exp_iface{}]}]}.
 scan_model(FileName) ->
-    declutter_mif(FileName, model_info:model_info(FileName)).
+    clean_nestcond:clean_expansions_from_model(
+      declutter_mif(FileName, model_info:model_info(FileName))).
 
 %%% @doc
 %%% Returns the name used for the unbound variables passed
@@ -171,8 +172,7 @@ print_exp_iface(ExpIfaceList) when is_list(ExpIfaceList) ->
 %%%-------------------------------------------------------------------
 
 scan_func_aux(FileName, FuncName, Args) ->
-    clean_nestcond:clean_expansions(
-      scan_func_dbg_aux(FileName, FuncName, Args)).
+      scan_func_dbg_aux(FileName, FuncName, Args).
 
 scan_func_dbg_aux(FileName, FuncName, Args) ->
     see_logic:generate_logical_function({FuncName, length(Args)},
