@@ -1,5 +1,4 @@
--record(expansion, {old_applys = [], applys = [], preds = [],
-		    conds = [], result = none, pat_matcha = none,
+-record(expansion, {applys = [], conds = [], result = none, pat_matcha = none,
 		    ctx_num = 1, highest_given_ctx = 1,
 		    pat_matcha_type = none, record_definitions = [],
 		    last_given_ids = [], idioms = []}).

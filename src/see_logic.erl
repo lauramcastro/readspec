@@ -13,7 +13,7 @@
 
 -import(nestcond, [make_expansion/0, set_result/2, add_arg_if_not_bound/2,
 		   set_func_patmatcha/2, set_case_patmatcha/2, clear_patmatcha/1,
-		   add_cond/2, add_var_value/3, has_value/2, is_bounded/2,
+		   add_cond/2, add_var_value/3, has_value/2, is_bound/2,
 		   variable_type/2, move_result_to_case_patmatcha/1,
 		   add_apply/5, touch_index/2, touch_index_n_times/3,
 		   get_result/1, get_context/1, set_context/2, new_context/1,
@@ -169,8 +169,8 @@ expand_type(application, App, #expansion{} = Expansion, IndexedSyntaxTree) ->
 		    exit:{not_expandable, _} -> [expand_application_aux(Module, Function, Args, Arity, Expansion)]
 		end
 	    end;
-	Expansions when is_list(Expansions) -> Expansions;
-	Expansion -> [Expansion]
+	Expansions when is_list(Expansions) -> Expansions
+%%	Expansion -> [Expansion]  % Never matches according to dialyzer
     end;
 expand_type(clause, Func, #expansion{pat_matcha_type = func,
 				     pat_matcha = ArgMatchas} = Expansion, IndexedSyntaxTree) ->
