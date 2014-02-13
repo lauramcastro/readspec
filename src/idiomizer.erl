@@ -1,22 +1,54 @@
+%%%-------------------------------------------------------------------
 %%% @author Pablo Lamela <P.Lamela-Seijas@kent.ac.uk>
 %%% @copyright (C) 2014, Pablo Lamela Seijas
 %%% @doc
-%%% Adds information about idioms to the structure
+%%% Defines functions to add information about idioms to the structure.
+%%% It also defines a framework to tag Erlang elements inside an Erlang
+%%% structure so that they can be extracted and modified in place.
+%%% Functions that start with "ts" define "templates tags" designed to
+%%% work with erl_syntax elements. Functions that start with "t"
+%%% define generic "templates tags" that may potentially work with any Erlang
+%%% term. Template tags use a common reference that is used to tell
+%%% apart Erlang terms that are part of the template tags from the ones
+%%% that are not.
+%%% For example, we may build a template like this:
+%%% <p><code>
+%%% Ref = make_ref().
+%%% Template = {1, idiomizer:tvar(Ref, 'number_in_the_middle'), 3}.
+%%% </code></p>
+%%% And then we can match that template with any Erlang term
+%%% by using {@link idiomizer:extract_vars/4} as follows:
+%%% <p><code>
+%%% {match, Dict} = idiomizer:extract_vars(Ref, Template, {1, 2, 3}, dict:new()).
+%%% </code></p>
+%%% Where <code>dict:to_list(Dict)</code> would be:
+%%% <p><code> [{number_in_the_middle,2}] </code></p>
+%%% And if we use templates which have the same name for several tags,
+%%% {@link idiomizer:extract_vars/4} will check that they all match the
+%%% same value.
 %%% @end
 %%% Created : 5 Feb 2014 by Pablo Lamela
+%%%-------------------------------------------------------------------
 
 -module(idiomizer).
 
 -export([idiomize_module_info/1,
 	 tsatom_val/2, tsint_val/2, tsvar_name/2, tsvar_name_and_id/3, tsvar_id/2,
-	 tcontainer/2, tvar/2, tobj/2, extract_vars/4, replace_vars/3,
-	 tsoneellist_elid/2]).
+	 tvar/2, tobj/2, extract_vars/4, replace_vars/3, tsoneellist_elid/2]).
 
 -include("records.hrl").
 -include("template_recs.hrl").
 
 %% General Function
 
+%%% @doc
+%%% Generates idiom information for a <code>#module_iface{}</code> record.
+%%% It generates both generic information about statem model expansions,
+%%% and it also detects common patterns defined in
+%%% {@link idiom_definitions:idiom_template_list/1}
+%%% @param MIface the <code>#module_iface{}</code> record to idiomize
+%%% @return the idiomized <code>#module_iface{}</code> record
+-spec idiomize_module_info(MIface :: #module_iface{}) -> #module_iface{}.
 idiomize_module_info(MIface) ->
     Ref = make_ref(),
     ArgsIdiomized = idiomize_module_info_args(MIface),
@@ -201,13 +233,34 @@ check_match_just_once(Tuple, _, ETD, _, _) ->
 
 %% Tag extraction
 
+%%% @doc
+%%% Matches an Erlang structure (Target) with a template and
+%%% stores in a dictionary the subterms that match with the
+%%% tags in the template. If several tags have the same
+%%% name, it ensures that all of them have the same Erlang
+%%% structure associated.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param Template the template that must be used.
+%%% @param Target the Erlang structure to match to the template.
+%%% @param Dict the dictionary that will save the information extracted. It
+%%% may be empty and it may be the one returned by another call to this function,
+%%% this way it acts as an accumulator.
+%%% @return a tuple with the atom <code>match</code> and the resulting
+%%% dictionary if the template matches the target, or else the atom
+%%% <code>no_match</code> and a term explaining the reason why it
+%%% did not match. If the template produces an exception while matching
+%%% this is also considered a <code>no_match</code>.
+%%% @see replace_vars/3
+-spec extract_vars(reference(), Template :: any(), Target :: any(), Dict :: dict()) ->
+			  {'match', dict()} | {'no_match', Err :: any()}.
 extract_vars(Ref, Template, Target, Dict) ->
     try extract_vars({Template, Target}, {Ref, Dict}) of
 	{_, Result} -> {match, Result}
     catch
 	exit:{no_match, Err} -> {no_match, Err}
     end.
-
 extract_vars({#tcontainer{ref = Ref, content = Content},
 	      Sth}, {Ref, Result}) ->
     case Content of
@@ -261,6 +314,24 @@ replace_mapper(Ref, Dict) ->
 	end,
     G(G, F, Ref, Dict).
 
+%%% @doc
+%%% Replaces the elements in the dictionary Dict inside the template Template.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param Dict dictionary that stores the substitutions to make in the template.
+%%% On each entry of the dictionary, the key represents the name of a tag, and
+%%% the value represents the term that must be swapped with the tag. The dict
+%%% is of the same kind that the one generated by the function extract_vars.
+%%% All the names of the tags inside the template must have their entry on
+%%% the dictionary or otherwise the function will throw the exception
+%%% <code>unbound_variable</code>.
+%%% @param Template the template that must be used. Templates that are used
+%%% with replace_vars/3 function cannot have tags of the kind tobj.
+%%% @return the element generated from the template
+%%% @throws {unbound_variable, term()}
+%%% @see extract_vars/4
+-spec replace_vars(Ref :: reference(), Dict :: dict(), Template :: any()) -> any().
 replace_vars(Ref, Dict, Element) ->
     F = replace_mapper(Ref, Dict),
     F(Element).
@@ -285,33 +356,113 @@ tvar_set(Dict, #tvar_rec{id = Id}) ->
 
 %% Tagging funcs
 
+%%% @doc
+%%% Creates a template that matches an atom in abstract syntax.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param ValueTemplate template that will be matched to the result of applying
+%%% erl_syntax:atom_value/1 to the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+-spec tsatom_val(Ref :: reference(), ValueTemplate :: term()) -> TemplateTag :: #tcontainer{}.
 tsatom_val(Ref, Value) ->
     tobj(Ref,
 	[{{erl_syntax, type}, atom},
          {{erl_syntax, atom_value}, Value}]).
 
+
+%%% @doc
+%%% Creates a template that matches an integer in abstract syntax.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param ValueTemplate template that will be matched to the result of applying
+%%% erl_syntax:integer_value/1 to the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+-spec tsint_val(Ref :: reference(), ValueTemplate :: term()) -> TemplateTag :: #tcontainer{}.
 tsint_val(Ref, Value) ->
     tobj(Ref,
 	 [{{erl_syntax, type}, integer},
 	  {{erl_syntax, integer_value}, Value}]).
 
+%%% @doc
+%%% Equivalent to {@link tsvar_name_and_id/3} but it does not include a
+%%% template for the variable name.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param ValueTemplate template that will be matched to the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+%%% @see tsvar_name_and_id/3
+-spec tsvar_id(Ref :: reference(), ValueTemplate :: term()) -> TemplateTag :: #tcontainer{}.
 tsvar_id(Ref, Id) ->
     tobj(Ref,
 	 [{{erl_syntax, type}, variable},
 	  {identity, Id}]).
 
+%%% @doc
+%%% Equivalent to {@link tsvar_name_and_id/3} but it does not include a
+%%% template for the target Erlang term.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param NameTemplate template that will be matched to the result of applying
+%%% erl_syntax:variable_name/1 to the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+%%% @see tsvar_name_and_id/3
+-spec tsvar_name(Ref :: reference(), NameTemplate :: term()) -> TemplateTag :: #tcontainer{}.
 tsvar_name(Ref, Name) ->
     tobj(Ref,
 	 [{{erl_syntax, type}, variable},
           {{erl_syntax, variable_name}, Name}]).
 
 
+%%% @doc
+%%% Creates a template that matches a variable in abstract syntax.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param NameTemplate template that will be matched to the result of applying
+%%% erl_syntax:variable_name/1 to the target Erlang term.
+%%% @param ValueTemplate template that will be matched to the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+%%% @see tsvar_name/2
+%%% @see tsvar_id/2
+-spec tsvar_name_and_id(Ref :: reference(), NameTemplate :: term(),
+			ValueTemplate :: term()) -> TemplateTag :: #tcontainer{}.
 tsvar_name_and_id(Ref, Name, Value) ->
     tobj(Ref,
 	 [{{erl_syntax, type}, variable},
           {{erl_syntax, variable_name}, Name},
 	  {identity, Value}]).
 
+%%% @doc
+%%% Creates a template that matches a list with one element in abstract syntax.
+%%% It uses {@link tobj/2} underneath and because of that it cannot be
+%%% used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param Template template that will be matched to the result of applying
+%%% erl_syntax:list_head/1 of the target Erlang term.
+%%% @return the corresponding "template tag"
+%%% @see extract_vars/4
+-spec tsoneellist_elid(Ref :: reference(), Template :: term()) -> TemplateTag :: #tcontainer{}.
 tsoneellist_elid(Ref, Value) ->
     tobj(Ref,
 	 [{{erl_syntax, list_length}, 1},
@@ -320,9 +471,48 @@ tsoneellist_elid(Ref, Value) ->
 tcontainer(Ref, Content) ->
     #tcontainer{ref = Ref, content = Content}.
 
+%%% @doc
+%%% Creates a template tag with the name Id that matches any Erlang term.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param Id the name of the tag created.
+%%% @return a "template tag" with the name Id that matches any Erlang term.
+%%% @see extract_vars/4
+%%% @see replace_vars/3
+-spec tvar(Ref :: reference(), Id :: term()) -> TemplateTag :: #tcontainer{}.
 tvar(Ref, Id) ->
     tcontainer(Ref, #tvar_rec{id = Id}).
 
+%%% @doc
+%%% Creates a template tag with no name that allows you to match
+%%% the same Erlang term in several different ways. It allows you
+%%% to incorporate apply calls in a template and match their results.
+%%% Apply calls are assumed to take only one parameter, and the parameter
+%%% that is used is the Erlang term matched. If the call produces an
+%%% exception, this is considered a <code>no_match</code>.
+%%% The special tuple <code>{identity, term()}</code> allows you to match
+%%% the whole structure matched by the <code>tobj</code> "template tag"
+%%% with another "template tag" or Erlang term, for example: a <code>tvar</code>
+%%% tag to save the value if it matches.
+%%% <code>tobj</code> cannot be used with {@link replace_vars/3}.
+%%% @param Ref the reference used to create the tags in the template, it is used
+%%% to reliably tell apart items that are template tags from those that are not,
+%%% which allows the use of several kinds of templates in the same structure.
+%%% @param FuncList A list with the templates and subtargets to match in the form:
+%%% <ul>
+%%% <li><code>{{Module, Function}, Template}</code> - Matches the result of
+%%% calling the function Module:Function, with the target Erlang term as first
+%%% argument, to the template Template</li>
+%%% <li><code>{identity, Template}</code> - Matches the target Erlang term
+%%% to the template Template</li>
+%%% </ul>
+%%% @return The template
+%%% @see extract_vars/4
+-spec tobj(Ref :: reference(),
+	   [{identity, Anything :: term()} |
+	    {{Module :: atom(), Function :: atom()}, Anything :: term()}])
+	  -> TemplateTag :: #tcontainer{}.
 tobj(Ref, FuncList) ->
     tcontainer(Ref, #tobj_rec{func_list = FuncList}).
 
