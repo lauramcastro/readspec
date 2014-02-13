@@ -1,17 +1,38 @@
+%%%-------------------------------------------------------------------
 %%% @author Pablo Lamela <P.Lamela-Seijas@kent.ac.uk>
 %%% @copyright (C) 2014, Pablo Lamela Seijas
 %%% @doc
-%%% Simplified version of description
+%%% Provides functions to clean redundant information
+%%% from <code>#exp_iface{}</code> records and to transverse
+%%% them with functions analogous to the ones in the module lists.
 %%% @end
 %%% Created : 30 Jan 2014 by Pablo Lamela
+%%%-------------------------------------------------------------------
 
 -module(clean_nestcond).
 
--export([clean_expansions/1, clean_expansion/1, extract_varnames_from_exp/1,
-	 map_model_expansions/2, mapfold_through_exp/3, bt_mapfold_through_exp/3,
+-export([clean_expansions/1, clean_expansion/1, map_model_expansions/2,
+	 mapfold_through_exp/3, bt_mapfold_through_exp/3,
 	 clean_expansions_from_model/1]).
 -include("records.hrl").
 
+%%% @doc
+%%% Analogous to mapfold in standard module lists but
+%%% applies the function to every element of the <code>#exp_iface{}</code>
+%%% record, (i.e: every variable definition, every condition, the result, and
+%%% every idiom block).
+%%% @param Fun the function that will be map-folded
+%%% @param Acc0 the initial accumulator to pass to the function
+%%% @param ExpIface1 the original <code>#exp_iface{}</code> record
+%%% @return a tuple with the updated <code>#exp_iface{}</code> record
+%%% and the resulting accumulator
+-spec mapfold_through_exp(Fun, Acc0 :: Acc, ExpIface1) -> {ExpIface2, Acc1 :: Acc} when
+      Fun :: fun((A, AccIn :: Acc) -> {B, AccOut :: Acc}),
+      A :: term(),
+      B :: term(),
+      Acc :: term(),
+      ExpIface1 :: #exp_iface{},
+      ExpIface2 :: #exp_iface{}.
 mapfold_through_exp(Func, Acc0, #exp_iface{var_defs = VarDefs,
 					   conds = Conds,
 					   result = Result,
@@ -25,6 +46,25 @@ mapfold_through_exp(Func, Acc0, #exp_iface{var_defs = VarDefs,
 			result = NewResult,
 			idioms = NewIdioms}, Acc4}.
 
+%%% @doc
+%%% Similar to {@link mapfold_through_exp/3} but behaves
+%%% like {@link utils:bt_mapfold/3} instead of the
+%%% standard mapfold function from the module lists.
+%%% @param Fun the function that will be map-folded
+%%% @param Acc0 the initial accumulator to pass to the function
+%%% @param ExpIface1 the original <code>#exp_iface{}</code> record
+%%% @return a tuple with the updated <code>#exp_iface{}</code> record
+%%% and the resulting accumulator
+%%% @see mapfold_through_exp/3
+%%% @see utils:bt_mapfold/3
+-spec bt_mapfold_through_exp(Fun, Acc0 :: Acc, ExpIface1) -> {ExpIface2, Acc1 :: Acc} when
+      Fun :: fun((A, AccIn :: Acc) -> {OpRes, B, AccOut :: Acc}),
+      A :: term(),
+      B :: term(),
+      Acc :: term(),
+      OpRes :: 'success' | 'failure' | 'finished',
+      ExpIface1 :: #exp_iface{},
+      ExpIface2 :: #exp_iface{}.
 bt_mapfold_through_exp(Func, Acc0, #exp_iface{var_defs = VarDefs,
 					      conds = Conds,
 					      result = Result,
@@ -37,11 +77,24 @@ bt_mapfold_through_exp(Func, Acc0, #exp_iface{var_defs = VarDefs,
 			result = NewResult,
 			idioms = NewIdioms}, AccF}.
 
-
+%%% @doc
+%%% Maps all the <code>#exp_iface{}</code> records inside a
+%%% <code>#module_iface{}</code> by using the provided
+%%% function.
+%%% @param Fun the function that will be mapped
+%%% @param ModuleIface1 the <code>#module_iface{}</code> to map
+%%% @return the updated <code>#module_iface{}</code>
+-spec map_model_expansions(Fun, MIface1) -> MIface2 when
+      Fun :: fun((A) -> B),
+      MIface1 :: #module_iface{},
+      MIface2 :: #module_iface{},
+      A :: #exp_iface{},
+      B :: #exp_iface{}.
 map_model_expansions(Fun, #module_iface{call_list = List} = Mod) ->
     Mod#module_iface{
       call_list = lists:map(fun (X) -> map_call_expansions(Fun, X) end, List)
      }.
+
 map_call_expansions(Fun, #call_iface{pre_exp = PreExp,
 				next_exp = NextExp,
 				post_exp = PostExp} = CallIface) ->
@@ -49,12 +102,34 @@ map_call_expansions(Fun, #call_iface{pre_exp = PreExp,
 			 next_exp = lists:map(Fun, NextExp),
 			 post_exp = lists:map(Fun, PostExp)}.
 
+%%% @doc
+%%% Removes redundant information from all the <code>#exp_iface{}</code>
+%%% records inside a <code>#module_iface{}</code>.
+%%% @param Model the <code>#module_iface{}</code> to clean
+%%% @return the cleaned <code>#module_iface{}</code>
+%%% @see clean_expansion/1
+-spec clean_expansions_from_model(Model :: #module_iface{}) -> #module_iface{}.
 clean_expansions_from_model(Model) ->
     map_model_expansions(fun clean_expansion/1, Model).
 
+%%% @doc
+%%% Removes redundant information from all the <code>#exp_iface{}</code>
+%%% records in a list.
+%%% @param Expansions the list with all the <code>#exp_iface{}</code>
+%%% records to clean
+%%% @return the cleaned list
+%%% @see clean_expansion/1
+-spec clean_expansions([#exp_iface{}]) -> [#exp_iface{}].
 clean_expansions(Expansions) ->
     [clean_expansion(Expansion) || Expansion <- Expansions].
 
+%%% @doc
+%%% Removes redundant information from an <code>#exp_iface{}</code>
+%%% record. It also tries to find better names for variable when
+%%% possible.
+%%% @param Expansions the <code>#exp_iface{}</code> record to clean
+%%% @return the cleaned <code>#exp_iface{}</code> record
+-spec clean_expansion(#exp_iface{}) -> #exp_iface{}.
 clean_expansion(Expansion) ->
     remove_ctxt_labels(
       remove_duplicated_conds(
@@ -64,7 +139,6 @@ clean_expansion(Expansion) ->
 intuitive_renaming(#exp_iface{var_defs = Applies} = Expansion) ->
     rename_all_to_best([Apply#apply.name
 			|| Apply <- Applies, Apply#apply.is_call], Expansion).
-
 
 find_best_renaming(Name, Applies) ->
     PossibleRenamings = find_possible_renamings(Name, Applies),
@@ -132,6 +206,7 @@ extract_varnames_from_conds(Conds) when is_list(Conds) ->
     lists:append([extract_varnames_from_cond(Cond) || Cond <- Conds]).
 extract_varnames_from_cond(Cond) when is_tuple(Cond) ->
     lists:append([extract_varnames_from_ast(element(ElNum, Cond)) || ElNum <- lists:seq(2, size(Cond))]).
+
 extract_varnames_from_ast(AST) -> extract_varnames_from_ast(AST, erl_syntax:type(AST)).
 extract_varnames_from_ast(AST, variable) -> 
     [erl_syntax:variable_name(AST)];
