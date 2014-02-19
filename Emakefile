@@ -1,10 +1,3 @@
-{'./src/readspec',            [{outdir, './ebin'}]}.
-{'./src/readspec_inspect',    [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/clean_nestcond.erl',    [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/idiom_definitions.erl', [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/idiomizer.erl',         [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/model_info.erl',        [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/nestcond.erl',          [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/see.erl',               [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/see_logic.erl',         [{outdir, './ebin'}]}.
-{'./src/symbolic-execution/utils.erl',             [{outdir, './ebin'}]}.
+{'./src/readspec',             [{i, "./include"}, {outdir, './ebin'}]}.
+{'./src/readspec_inspect',     [{i, "./include"}, {outdir, './ebin'}]}.
+{'./src/symbolic-execution/*', [{i, "./include"}, {outdir, './ebin'}]}.
