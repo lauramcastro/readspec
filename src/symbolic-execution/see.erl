@@ -15,7 +15,9 @@
 	 scan_func_str_args_dbg/3, scan_model/1,
 	 get_arg_var_name/1, get_field_var_name/1,
 	 get_result_var_name/0, scan_and_print_model/1,
-	 idiomize_model_info/1, print_model_info/1, print_exp_iface/1]).
+	 idiomize_model_info/1, print_model_info/1,
+	 print_model_info_to_str/1, print_exp_iface/1,
+	 print_exp_iface_to_str/1, scan_and_print_model_to_str/1]).
 
 -include("records.hrl").
 
@@ -130,13 +132,32 @@ get_result_var_name() ->
 %%% @param FileName is an string or atom representing the
 %%% relative path to the source where the model is defined.
 %%% @see scan_model/1
-%%% @see idiomize_model_infol/1
+%%% @see idiomize_model_info/1
 %%% @see print_model_info/1
+%%% @see scan_and_print_model_to_str/1
 -spec scan_and_print_model(atom() | string()) -> 'ok'.
 scan_and_print_model(FileName) ->
     Model = scan_model(FileName),
     IdiomizedModel = idiomizer:idiomize_module_info(Model),
     print_model_info(IdiomizedModel).
+
+%%% @doc
+%%% Extracts and prints nicely to a string information from a model.
+%%% Is a combination of {@link scan_model/1},
+%%% {@link idiomize_model_info/1}, and
+%%% {@link print_model_info_to_str/1}).
+%%% @param FileName is an string or atom representing the
+%%% relative path to the source where the model is defined.
+%%% @return a string with the pretty-printed information
+%%% @see scan_model/1
+%%% @see idiomize_model_info/1
+%%% @see print_model_info_to_str/1
+%%% @see scan_and_print_model/1
+-spec scan_and_print_model_to_str(atom() | string()) -> string().
+scan_and_print_model_to_str(FileName) ->
+    Model = scan_model(FileName),
+    IdiomizedModel = idiomizer:idiomize_module_info(Model),
+    print_model_info_to_str(IdiomizedModel).
 
 %%% @doc
 %%% Adds information about idioms to a #module_iface{} record.
@@ -152,19 +173,45 @@ idiomize_model_info(ModelInfo) ->
 %%% @param ModelInfo record with the information extracted
 %%% from a model.
 %%% @see scan_model/1
+%%% @see print_model_info_to_str/1
 -spec print_model_info(ModelInfo::#module_iface{}) -> 'ok'.
 print_model_info(ModelInfo) ->
-    model_info:ppr_callinfos(clutter_mif(ModelInfo)).
+    io:format("~s", [print_model_info_to_str(ModelInfo)]),
+    ok.
+
+%%% @doc
+%%% Prints to a string a #module_iface{} record in a nicer way.
+%%% @param ModelInfo record with the information extracted
+%%% from a model.
+%%% @return a string with the pretty-printed information
+%%% @see scan_model/1
+%%% @see print_model_info/1
+-spec print_model_info_to_str(ModelInfo::#module_iface{}) -> string().
+print_model_info_to_str(ModelInfo) ->
+    lists:flatten(model_info:ppr_callinfos(clutter_mif(ModelInfo))).
 
 %%% @doc
 %%% Prints an #exp_iface{} record or a list of them in
 %%% a nicer way.
 %%% @param Exp_iface possibility or list of possibilities
 %%% @see scan_func/3
+%%% @see print_exp_iface_to_str/1
 -spec print_exp_iface([#exp_iface{}] | #exp_iface{}) -> 'ok'.
-print_exp_iface(#exp_iface{} = ExpIface) ->
+print_exp_iface(ExpIface) ->
+    io:format("~s", [print_exp_iface_to_str(ExpIface)]),
+    ok.
+
+%%% @doc
+%%% Prints to a string an #exp_iface{} record or a list of them in
+%%% a nicer way.
+%%% @param Exp_iface possibility or list of possibilities
+%%% @return a string with the pretty-printed information
+%%% @see scan_func/3
+%%% @see print_exp_iface/1
+-spec print_exp_iface_to_str([#exp_iface{}] | #exp_iface{}) -> string().
+print_exp_iface_to_str(#exp_iface{} = ExpIface) ->
     nestcond:ppr_expansions([clutter_exp(ExpIface)]);
-print_exp_iface(ExpIfaceList) when is_list(ExpIfaceList) ->
+print_exp_iface_to_str(ExpIfaceList) when is_list(ExpIfaceList) ->
     nestcond:ppr_expansions(clutter_exp_list(ExpIfaceList)).
 
 %%%-------------------------------------------------------------------

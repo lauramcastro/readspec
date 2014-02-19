@@ -542,28 +542,31 @@ get_record_definition(RecordType,
     end.
 
 %%% @doc
-%%% Prints the main information of a list of <code>#expansion{}</code> records
-%%% using semi-natural language. It uses idiom information
-%%% provided in the <code>#expansion{}</code> record when possible.
+%%% Prints to a string the main information of a list of
+%%% <code>#expansion{}</code> records using semi-natural language.
+%%% It uses idiom information provided in the <code>#expansion{}</code>
+%%% record when possible.
 %%% @param Expansion the <code>#expansion{}</code> record
--spec ppr_expansions(Expansions :: [#expansion{}]) -> 'ok'.
+%%% @return a string representation of the pretty-printed information
+-spec ppr_expansions(Expansions :: [#expansion{}]) -> string().
 ppr_expansions(Expansions) ->
-    case length(Expansions) of
-	Length when Length < 2 -> ok;
-	_ -> io:format("================================~n"),
-	     io:format("       POSSIBILITIES ...~n"),
-	     io:format("================================~n~n")
-    end,
-    ppr_expansions_aux(Expansions).
-ppr_expansions_aux([]) -> ok;
+    lists:flatten(
+      [case length(Expansions) of
+	   Length when Length < 2 -> [];
+	   _ -> [io_lib:format("================================~n", []),
+		 io_lib:format("       POSSIBILITIES ...~n", []),
+		 io_lib:format("================================~n~n", [])]
+       end,
+       ppr_expansions_aux(Expansions)]).
+ppr_expansions_aux([]) -> [];
 ppr_expansions_aux([Expansion|[]]) ->
     ppr_expansion(Expansion);
 ppr_expansions_aux([Expansion|Rest]) ->
-    ppr_expansion(Expansion),
-    io:format("================================~n"),
-    io:format("        OTHERWISE ...~n"),
-    io:format("================================~n~n"),
-    ppr_expansions_aux(Rest).
+    [ppr_expansion(Expansion),
+     io_lib:format("================================~n", []),
+     io_lib:format("        OTHERWISE ...~n", []),
+     io_lib:format("================================~n~n", []),
+     ppr_expansions_aux(Rest)].
 
 ppr_expansion(Expansion) ->
     ppr_expansion_aux(clean_by_idioms(Expansion)).
@@ -577,28 +580,27 @@ ppr_expansion_aux(#expansion{applys = Applies,
 			     conds = Conds,
 			     result = Result,
 			     idioms = Idioms} = Expansion) ->
-    case Applies of
-	[] -> ok;
-	_ -> io:format("*** DEFINITIONS ***~n~n"),
-	     lists:map(fun (X) -> ppr_apply(X, Idioms) end, Applies)
-    end,
-    case Conds of
-	[] -> ok;
-	_ -> io:format("*** REQUIREMENTS ***~n~n"),
-	     lists:map(fun (X) -> ppr_cond(X, Idioms) end, Conds)
-    end,
-    case has_idiom('__res_idiom__', Expansion) of
-	false -> io:format("*** RESULT ***~n~n"),
-		 ppr_result(Result, Idioms);
-	true -> print_idiom_or_varname('__res_idiom__', Idioms)
-    end,
-    ok.
+    [case Applies of
+	 [] -> [];
+	 _ -> [io_lib:format("*** DEFINITIONS ***~n~n", []),
+	       lists:map(fun (X) -> ppr_apply(X, Idioms) end, Applies)]
+     end,
+     case Conds of
+	 [] -> [];
+	 _ -> [io_lib:format("*** REQUIREMENTS ***~n~n", []),
+	       lists:map(fun (X) -> ppr_cond(X, Idioms) end, Conds)]
+     end,
+     case has_idiom('__res_idiom__', Expansion) of
+	 false -> [io_lib:format("*** RESULT ***~n~n", []),
+		   ppr_result(Result, Idioms)];
+	 true -> print_idiom_or_varname('__res_idiom__', Idioms)
+     end].
 
 has_idiom(Idiom, #expansion{idioms = Idioms}) ->
     lists:keymember(Idiom, #idiom.name, Idioms).
 
 print_idiom_or_varname(Idiom, Idioms) ->
-    io:format("~s", [get_idiom_or_varname(Idiom, Idioms)]).
+    io_lib:format("~s", [get_idiom_or_varname(Idiom, Idioms)]).
 
 get_idiom_or_varname(Idiom, Idioms) ->
     case lists:keyfind(Idiom, #idiom.name, Idioms) of
@@ -672,53 +674,48 @@ replace_in_str([], _, _) -> [].
 
 ppr_apply(#apply{name = Name, is_call = true,
 		 module = Module, call = Call, arg_list = Args}, Idioms) ->
-    io:format("[*] We define the variable \"~s\" as the result provided by~n", [atom_to_list(Name)]),
-    ModuleDesc = case Module of
-		     '?MODULE' -> "this same module";
-		     _ -> "the module \"" ++ atom_to_list(Module) ++ "\""
-		 end,
-    io:format("the function called \"~s\" from ~s, when it is~n", [atom_to_list(Call),
-								    ModuleDesc]),
-    io:format("executed "),
-    case length(Args) of
-	0 -> io:format("without arguments.~n");
-	1 -> io:format("with the following argument:~n");
-	N -> io:format("with the following ~B arguments:~n", [N])
-    end,
-    [ppr_argument(Idioms, Arg) || Arg <- Args],
-    io:format("~n");
+    [io_lib:format("[*] We define the variable \"~s\" as the result provided by~n", [atom_to_list(Name)]),
+     begin
+	 ModuleDesc = case Module of
+			  '?MODULE' -> "this same module";
+			  _ -> "the module \"" ++ atom_to_list(Module) ++ "\""
+		      end,
+	 io_lib:format("the function called \"~s\" from ~s, when it is~n", [atom_to_list(Call),
+									    ModuleDesc])
+     end,
+     io_lib:format("executed ", []),
+     case length(Args) of
+	 0 -> io_lib:format("without arguments.~n", []);
+	 1 -> io_lib:format("with the following argument:~n", []);
+	 N -> io_lib:format("with the following ~B arguments:~n", [N])
+     end,
+     [ppr_argument(Idioms, Arg) || Arg <- Args],
+     io_lib:format("~n", [])];
 ppr_apply(#apply{name = Name, is_arg = true}, _Idioms) ->
-    io:format("[*] We define the variable \"~s\" just as the argument provided~n~n", [atom_to_list(Name)]),
-    ok;
+    io_lib:format("[*] We define the variable \"~s\" just as the argument provided~n~n", [atom_to_list(Name)]);
 ppr_apply(#apply{name = Name, evaluated = true, value = Value}, Idioms) ->
-    io:format("[*] We define the variable \"~s\" as equal to:~n", [atom_to_list(Name)]),
-    io:format("     ~s~n~n", [explain_ast(Value, Idioms, 5)]),
-    ok.
+    [io_lib:format("[*] We define the variable \"~s\" as equal to:~n", [atom_to_list(Name)]),
+     io_lib:format("     ~s~n~n", [explain_ast(Value, Idioms, 5)])].
 
 ppr_argument(Idioms, Arg) ->
-    io:format("    - ~s~n", [explain_ast(Arg, Idioms, 6)]),
-    ok.
+    io_lib:format("    - ~s~n", [explain_ast(Arg, Idioms, 6)]).
 
 ppr_cond({equals, Var, Sth}, Idioms) ->
-    io:format("[*] ~s must be equal to:~n",
-	      [first_cap(get_idiom_or_varname(erl_syntax:variable_name(Var), Idioms))]),
-    io:format("     ~s~n~n", [explain_ast(Sth, Idioms, 5)]),
-    ok;
+    [io_lib:format("[*] ~s must be equal to:~n",
+		   [first_cap(get_idiom_or_varname(erl_syntax:variable_name(Var), Idioms))]),
+     io_lib:format("     ~s~n~n", [explain_ast(Sth, Idioms, 5)])];
 ppr_cond({tuple_size, TupleVar, Size}, Idioms) ->
-    io:format("[*] ~s must contain a tuple with ~B elements.~n~n",
-	      [first_cap(get_idiom_or_varname(erl_syntax:variable_name(TupleVar), Idioms)),
-	       erl_syntax:integer_value(Size)]),
-    ok;
+    io_lib:format("[*] ~s must contain a tuple with ~B elements.~n~n",
+		  [first_cap(get_idiom_or_varname(erl_syntax:variable_name(TupleVar), Idioms)),
+		   erl_syntax:integer_value(Size)]);
 ppr_cond({list_size, ListVar, Size}, Idioms) ->
-    io:format("[*] ~s must contain a list with ~B elements.~n~n",
-	      [first_cap(get_idiom_or_varname(erl_syntax:variable_name(ListVar), Idioms)),
-	       erl_syntax:integer_value(Size)]),
-    ok;
+    io_lib:format("[*] ~s must contain a list with ~B elements.~n~n",
+		  [first_cap(get_idiom_or_varname(erl_syntax:variable_name(ListVar), Idioms)),
+		   erl_syntax:integer_value(Size)]);
 ppr_cond({record_type, RecordVar, Type}, Idioms) ->
-    io:format("[*] ~s must contain a record of type \"~s\".~n~n",
-	      [first_cap(get_idiom_or_varname(erl_syntax:variable_name(RecordVar), Idioms)),
-	       erl_syntax:atom_value(Type)]),
-    ok;
+    io_lib:format("[*] ~s must contain a record of type \"~s\".~n~n",
+		  [first_cap(get_idiom_or_varname(erl_syntax:variable_name(RecordVar), Idioms)),
+		   erl_syntax:atom_value(Type)]);
 ppr_cond({{idiom, Text, Subs}}, Idioms) ->
     ReplacedSubs = [case Sub of
 			{ast_var, Ast} -> get_idiom_or_varname(erl_syntax:variable_name(Ast), Idioms);
@@ -726,8 +723,7 @@ ppr_cond({{idiom, Text, Subs}}, Idioms) ->
 			{ast, Ast, N} -> explain_ast(Ast, Idioms, N)
 		    end || Sub <- Subs],
     FinalText = io_lib:format(Text, ReplacedSubs),
-    io:format("[*] ~s.~n~n", [first_cap(FinalText)]),
-    ok.
+    io_lib:format("[*] ~s.~n~n", [first_cap(FinalText)]).
 
 
 first_cap(A) -> first_cap_aux(lists:flatten(A)).
@@ -735,8 +731,7 @@ first_cap_aux([]) -> [];
 first_cap_aux([H|T]) -> [string:to_upper(H)|T].
 
 ppr_result(Result, Idioms) ->
-    io:format("~s~n~n", [explain_ast(Result, Idioms, 0)]),
-    ok.
+    io_lib:format("~s~n~n", [explain_ast(Result, Idioms, 0)]).
 
 explain_ast(AST, Idioms, Tab) ->
     explain_ast(erl_syntax:type(AST), AST, Idioms, Tab).
@@ -751,7 +746,7 @@ explain_ast(list, AST, Idioms, Tab) ->
 	_ -> "a list with the following elements:"
     end
 	++ [io_lib:format("~n~s- ~s", [Margin, explain_ast(erl_syntax:type(Element), Element, Idioms, Tab + 4)])
-     || Element <- ListElements];
+	    || Element <- ListElements];
 explain_ast(tuple, AST, Idioms, Tab) ->
     Margin = marginate(Tab + 4),
     TupleElements = erl_syntax:tuple_elements(AST),
@@ -761,7 +756,7 @@ explain_ast(tuple, AST, Idioms, Tab) ->
 	_ -> "a tuple with the following elements:"
     end
 	++ [io_lib:format("~n~s- ~s", [Margin, explain_ast(erl_syntax:type(Element), Element, Idioms, Tab + 4)])
-     || Element <- TupleElements];
+	    || Element <- TupleElements];
 explain_ast(atom, AST, _Idioms, _Tab) ->
     io_lib:format("the literal '~s'", [erl_prettypr:format(AST)]);
 explain_ast(integer, AST, _Idioms, _Tab) ->
@@ -784,9 +779,9 @@ explain_ast(record_expr, AST, Idioms, Tab) ->
 		io_lib:format("~n~s~s = ~s", [Pan, FieldName,
 					      explain_ast(erl_syntax:type(FieldValue),
 							  FieldValue, Idioms, Tab + 4)])
-		    
+
 	    end
-     || Field <- RecordFields];
+	    || Field <- RecordFields];
 explain_ast(_Type, AST, _Idioms, _Tab) ->
     throw({thing, _Type}),
     io_lib:format("the erlang term: ~s", [erl_prettypr:format(AST)]).

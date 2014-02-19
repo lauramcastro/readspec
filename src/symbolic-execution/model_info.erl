@@ -20,30 +20,30 @@ model_info(FileName) ->
     Transitions = get_transitions_and_args(Funcs, FileName, WildcardRecord),
     expand_all_functions(Transitions, WildcardRecord, FileName).
 
-ppr_callinfos([]) -> ok;
+ppr_callinfos([]) -> [];
 ppr_callinfos([#call_info{
-		name = Name,
-		num_args = ArgNum,
-		pre_exp = PreExps,
-		next_exp = NextExps,
-		post_exp = PostExps}|Rest]) ->
-		    io:format("*****************************************************************************~n"),
-		    io:format("    CALL: ~s/~B~n", [Name, ArgNum]),
-		    io:format("*****************************************************************************~n~n"),
-		    io:format("======================================================~n"),
-		    io:format("   PRECONDITION~n"),
-		    io:format("=====================================================~n~n"),
-		    nestcond:ppr_expansions(PreExps),
-		    io:format("======================================================~n"),
-		    io:format("   NEXT STATE~n"),
-		    io:format("=====================================================~n~n"),
-		    nestcond:ppr_expansions(NextExps),
-		    io:format("======================================================~n"),
-		    io:format("   POSTCONDITION~n"),
-		    io:format("=====================================================~n~n"),
-		    nestcond:ppr_expansions(PostExps),
-		    io:format("~n~n"),
-		    ppr_callinfos(Rest).
+		  name = Name,
+		  num_args = ArgNum,
+		  pre_exp = PreExps,
+		  next_exp = NextExps,
+		  post_exp = PostExps}|Rest]) ->
+    [io_lib:format("*****************************************************************************~n", []),
+     io_lib:format("    CALL: ~s/~B~n", [Name, ArgNum]),
+     io_lib:format("*****************************************************************************~n~n", []),
+     io_lib:format("======================================================~n", []),
+     io_lib:format("   PRECONDITION~n", []),
+     io_lib:format("=====================================================~n~n", []),
+     nestcond:ppr_expansions(PreExps),
+     io_lib:format("======================================================~n", []),
+     io_lib:format("   NEXT STATE~n", []),
+     io_lib:format("=====================================================~n~n", []),
+     nestcond:ppr_expansions(NextExps),
+     io_lib:format("======================================================~n", []),
+     io_lib:format("   POSTCONDITION~n", []),
+     io_lib:format("=====================================================~n~n", []),
+     nestcond:ppr_expansions(PostExps),
+     io_lib:format("~n~n", []),
+     ppr_callinfos(Rest)].
 
 expand_all_functions([], _, _) -> [];
 expand_all_functions([{Name, ArgNum}|Rest], WildcardRecord, FileName) ->
@@ -75,11 +75,11 @@ concat_atoms(Atom1, Atom2) -> list_to_atom(atom_to_list(Atom1)
 
 encapsulated_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
     dirty_generate_logical_function(FuncType, FuncName, Args,
-				      FileName, WildcardRecord).
+				    FileName, WildcardRecord).
 
 dirty_generate_logical_function(FuncType, FuncName, Args, FileName, WildcardRecord) ->
     case 
-	   see_logic:generate_logical_function(FuncName, Args, FileName) of
+	see_logic:generate_logical_function(FuncName, Args, FileName) of
 	{not_expandable, {function_not_found, _}} ->
 	    case FuncType of
 		next -> [make_exp_with_result(WildcardRecord, FileName)];
@@ -169,5 +169,5 @@ has_args_suffix(FuncName, Suffix) -> lists:suffix(Suffix, atom_to_list(FuncName)
 remove_args_suffix(FuncName, Suffix) ->
     FuncNameLst = atom_to_list(FuncName),
     {TransNameLst, Suffix} = lists:split(length(FuncNameLst) - length(Suffix),
-					       FuncNameLst),
+					 FuncNameLst),
     list_to_atom(TransNameLst).
