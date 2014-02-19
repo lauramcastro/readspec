@@ -1,10 +1,10 @@
+%%% -*- coding: utf-8 -*-
 %%%-------------------------------------------------------------------
 %%% @author Laura M. Castro <lcastro@udc.es>
-%%% @copyright (C) 2014, Laura M. Castro
+%%% @copyright (C) 2014
 %%% @doc
 %%%     Utility module to inspect code of QC properties and models.
 %%% @end
-%%% Created : 10 Jan 2014 by Laura M. Castro <lcastro@udc.es>
 %%%-------------------------------------------------------------------
 
 -module(readspec_inspect).
@@ -13,15 +13,22 @@
 
 -compile(export_all).
 
--spec property(PropertyModule :: string(),
-			   PropertyName :: string()) -> PropertyTree :: tuple().
-property(PropertyModule, PropertyName) ->
-	{PropertyModule, PropertyName}.
+%% @doc Extracts the module description from the edoc comments on the source code
+%% @end
+-spec model_description(ModelModule :: string()) -> ModuleDescription :: string().
+model_description(ModelModule) ->
+	"*** extract description of " ++ erlang:atom_to_list(ModelModule) ++ " ***".
 
--spec property_arguments(PropertyTree :: tuple()) -> [term()].
-property_arguments(_PropertyTree) ->
-	[].
+%% @doc Extracts the body of a property as a string from the source code
+%% @end
+-spec property_definition(ModelModule :: string(),
+						  PropertyName :: string()) -> PropertyBody :: string().
+property_definition(_ModelModule, PropertyName) ->
+	"*** extract property body of " ++ PropertyName ++ " ***".
 
--spec property_definition(PropertyTree :: tuple()) -> string().
-property_definition(_PropertyTree) ->
-	"true".
+%% @doc Extracts the property description from the edoc comments on the source code
+%% @end
+-spec property_description(ModelModule :: string(),
+						   PropertyName :: string()) -> PropertyDescription :: string().
+property_description(_ModelModule, PropertyName) ->
+	"*** extract property description of " ++ PropertyName ++ " ***".

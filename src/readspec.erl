@@ -1,45 +1,51 @@
+%%% -*- coding: utf-8 -*-
 %%%-------------------------------------------------------------------
 %%% @author Laura M. Castro <lcastro@udc.es>
-%%% @copyright (C) 2014, Laura M. Castro
+%%% @copyright (C) 2014
 %%% @doc
 %%%     Generate human-readable versions of test models =>
 %%%     by presenting human-readable versions of representative test
 %%%     cases that cover the model
 %%% @end
-%%% Created :  8 Jan 2014 by Laura M. Castro <lcastro@udc.es>
 %%%-------------------------------------------------------------------
 
 -module(readspec).
 
 -export([suite/3, counterexample/1]).
--export([cucumberise/1]). % EXPORTED ONLY FOR DEBUGGING PURPOSES
 
--define(DEBUG(IOString, Args), io:format(IOString, Args)).
+-include("readspec.hrl").
 
 suite(Model, Property, NumTests) ->
 	?DEBUG("Compiling module ~p~n", [Model]),
-	cover:reset(Model), % smother does not have this
-	{ok, Model} = cover:compile(erlang:atom_to_list(Model) ++ ".erl"),
-%	{module, Model} = smother:compile(erlang:atom_to_list(Model) ++ ".erl"),
+	ModelFile = erlang:atom_to_list(Model) ++ ".erl",
+	FeatureFile = erlang:atom_to_list(Model) ++ ".feature",
+	{ok, ModelName} = cover:compile(ModelFile), % {module, ModelName} = smother:compile(ModelFile),
 	?DEBUG("Generating set of ~p test cases~n", [NumTests]),
-%% THIS DOES NOT WORK WITH SMOTHER AT THE MOMENT
 	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Model, eqc:numtests(NumTests, Property()))),
-%%
-	?DEBUG("Ensuring coverage~n", []), %%% [removable here downwards]
-	ok = cover:reset(Model), % smother does not have this
+    %%% [removable here downwards]
+	?DEBUG("Ensuring coverage~n", []),
+	ok = cover:reset(ModelName), % smother does not have this
 	[] = eqc_suite:run(Property(), Suite),
-	{ok, _CoverFile} = cover:analyse_to_file(Model), %%% [removable up to here]
-%	{ok, _CoverFile} = smother:analyse_to_file(Model), %%% [removable up to here]
+	{ok, _CoverFile} = cover:analyse_to_file(ModelName), % {ok, _CoverFile} = smother:analyse_to_file(ModelName),
+    %%% [removable up to here]
 	?DEBUG("Cucumberising set of test cases~n", []),
-	ok = file:write_file("suite.cucumberl", io_lib:fwrite("SCENARIO: ~p~n", [cucumberise_suite(eqc_suite:cases(Suite))])).
+	ok = file:write_file(FeatureFile,
+						 clean(erl_prettypr:format(cucumberise_suite(Model, eqc_suite:cases(Suite)),
+												   [{encoding, utf8}, {paper, 120}, {ribbon, 120}]))).
 
 counterexample(Counterexample) ->
 	cucumberise_teststeps_aux(Counterexample, []).
 
 %%% -------------------------------------------------------------- %%%
 
-cucumberise_suite(Suite) ->
-	cucumberise_testcases(Suite, []).
+cucumberise_suite(Model, Suite) ->
+	FeatureName = erlang:atom_to_list(Model) -- "_eqc",
+	Scenarios = cucumberise_testcases(Suite, []),
+	erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
+						  erl_syntax:comment(2, [readspec_inspect:model_description(Model)])] ++
+							 [ erl_syntax:form_list([erl_syntax:comment(?EMPTY),
+													 erl_syntax:string(?SCENARIO ++ readspec_inspect:property_description(Model, "don't know the property")),
+													 Scenario]) || Scenario <- Scenarios ] ).
 
 
 cucumberise_testcases([], CucumberisedTestCases) ->
@@ -54,10 +60,10 @@ cucumberise_teststeps(TestCase) ->
 	cucumberise_teststeps_aux(TestCase, []).
 
 cucumberise_teststeps_aux([], CucumberisedTestSteps) ->
-	lists:flatten(cucumberise({scenario, lists:reverse(CucumberisedTestSteps)}));
+	erl_syntax:form_list(cucumberise({scenario, lists:reverse(CucumberisedTestSteps)}));
 % tests for QC properties
 cucumberise_teststeps_aux(Values, []) when is_tuple(Values) ->
-	cucumberise({scenario, Values});
+	erl_syntax:form_list(cucumberise({scenario, Values}));
 % test steps for QC state machines
 cucumberise_teststeps_aux([{set,_,Call={call,_Module,_Function,_Args}} | MoreSteps], CucumberisedTestSteps) ->
 	cucumberise_teststeps_aux(MoreSteps, [Call | CucumberisedTestSteps]).
@@ -65,7 +71,7 @@ cucumberise_teststeps_aux([{set,_,Call={call,_Module,_Function,_Args}} | MoreSte
 
 % we remove spureous cases such as {scenario, []}
 cucumberise({scenario, []}) ->
-	"";
+	erl_syntax:nil();
 % cucumberise QC property scenario
 cucumberise({scenario, Values}) when is_tuple(Values) ->
 	explain(Values, []);
@@ -78,10 +84,13 @@ explain({call,_Module,Function,Args}, MoreSteps) ->
 	"GIVEN " ++ enumerate_list([Args]) ++
     " WHEN " ++ io_lib:fwrite("~p", [Function]) ++
 		explain_also(MoreSteps) ++
-	" THEN ** insert property postcondition here ** \n";
+	" THEN ** insert property postcondition here ** ";
 explain(Values, []) ->
-	"GIVEN " ++ enumerate_list(Values) ++
-	" THEN ** insert property body here **".
+	[erl_syntax:string(?GIVEN),
+	 erl_syntax:form_list(enumerate_list(Values)),
+	 erl_syntax:string(?THEN  ++ 
+						   readspec_inspect:property_definition("don't know the module here",
+																"don't know the function here"))].
 
 
 explain_also([]) ->
@@ -95,7 +104,27 @@ explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 enumerate_list(Tuple) when is_tuple(Tuple) ->
 	enumerate_list(erlang:tuple_to_list(Tuple));
 enumerate_list(List) when is_list(List) ->
-	L = [io_lib:fwrite("AND ~p ", [X]) || X <- List],
-	[$A, $N, $D, 32 | T ] = lists:flatten(L),
+	L = [[erl_syntax:string(?AND), erl_syntax:abstract(X)] || X <- List],
+	[_H | T] = lists:flatten(L),
 	T.
+
+
+clean(StringStream) ->
+	trim_lines(lists:filter(fun($") -> false;
+							   ($%) -> false;
+							   (_C) -> true   end,
+							StringStream)).
+						 
+trim_lines([]) ->
+	[];
+trim_lines([H]) ->
+	[H];
+trim_lines([H1,H2]) ->
+	[H1,H2];
+trim_lines([H1,H2,H3]) ->
+	[H1,H2,H3];
+trim_lines([$\n, $\n | T]) ->
+	[$\n | trim_lines(T)];
+trim_lines([H|T]) ->
+	[H | trim_lines(T)].
 
