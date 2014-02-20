@@ -15,22 +15,22 @@
 
 -include("readspec.hrl").
 
-suite(Model, Property, NumTests) ->
+suite(Model, {Module, Fun, Args}, NumTests) ->
 	?DEBUG("Compiling module ~p~n", [Model]),
 	ModelFile = erlang:atom_to_list(Model) ++ ".erl",
 	FeatureFile = erlang:atom_to_list(Model) ++ ".feature",
 	{ok, ModelName} = cover:compile(ModelFile), % {module, ModelName} = smother:compile(ModelFile),
 	?DEBUG("Generating set of ~p test cases~n", [NumTests]),
-	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Model, eqc:numtests(NumTests, Property()))),
+	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Model, eqc:numtests(NumTests, erlang:apply(Module, Fun, Args)))),
     %%% [removable here downwards]
 	?DEBUG("Ensuring coverage~n", []),
 	ok = cover:reset(ModelName), % smother does not have this
-	[] = eqc_suite:run(Property(), Suite),
+	[] = eqc_suite:run(erlang:apply(Module, Fun, Args), Suite),
 	{ok, _CoverFile} = cover:analyse_to_file(ModelName), % {ok, _CoverFile} = smother:analyse_to_file(ModelName),
     %%% [removable up to here]
 	?DEBUG("Cucumberising set of test cases~n", []),
 	ok = file:write_file(FeatureFile,
-						 clean(erl_prettypr:format(cucumberise_suite(Model, eqc_suite:cases(Suite)),
+						 clean(erl_prettypr:format(cucumberise_suite(Model, Fun, eqc_suite:cases(Suite)),
 												   [{encoding, utf8}, {paper, 120}, {ribbon, 120}]))).
 
 counterexample(Counterexample) ->
@@ -38,7 +38,7 @@ counterexample(Counterexample) ->
 
 %%% -------------------------------------------------------------- %%%
 
-cucumberise_suite(Model, Suite) ->
+cucumberise_suite(Model, Property, Suite) ->
 	FeatureName = erlang:atom_to_list(Model) -- "_eqc",
 	Scenarios = cucumberise_testcases(Suite, []),
 	erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
@@ -46,7 +46,7 @@ cucumberise_suite(Model, Suite) ->
 						  erl_syntax:comment(2, [readspec_inspect:model_description(Model)])] ++
 							 [ erl_syntax:form_list([erl_syntax:comment(?EMPTY),
 													 erl_syntax:comment(?EMPTY),
-													 erl_syntax:string(?SCENARIO ++ readspec_inspect:property_description(Model, "don't know the property")),
+													 erl_syntax:string(?SCENARIO ++ readspec_inspect:property_description(Model, Property)),
 													 Scenario,
 													 erl_syntax:comment(?EMPTY)]) || Scenario <- Scenarios ] ).
 
