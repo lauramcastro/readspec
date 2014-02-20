@@ -1,9 +1,11 @@
+%%%-------------------------------------------------------------------
 %%% @author Pablo Lamela <P.Lamela-Seijas@kent.ac.uk>
 %%% @copyright (C) 2014, Pablo Lamela Seijas
 %%% @doc
-%%% Extracts useful information from statem model
+%%% Extracts useful information from a statem model
 %%% @end
 %%% Created : 30 Jan 2014 by Pablo Lamela
+%%%-------------------------------------------------------------------
 
 -module(model_info).
 
@@ -13,6 +15,17 @@
 
 -include("records.hrl").
 
+-type syntaxTree() :: any(). %%% as used in the syntax tools
+
+-type chars() :: [chars() | char()].
+%%% Not flattened string as returned by io_lib:format/2
+
+%%% @doc
+%%% Extracts information from a QuickCheck <code>statem</code> model.
+%%% @param FileName the name of the file containing the model
+%%% @return a list with information for each call
+%%% @see ppr_callinfos/1
+-spec model_info(FileName :: (atom() | string())) -> [#call_info{}].
 model_info(FileName) ->
     Funcs = see_logic:get_funcs(FileName),
     {RecordName, RecordFields} = get_state_fields(FileName),
@@ -20,6 +33,14 @@ model_info(FileName) ->
     Transitions = get_transitions_and_args(Funcs, FileName, WildcardRecord),
     expand_all_functions(Transitions, WildcardRecord, FileName).
 
+%%% @doc
+%%% Pretty prints to a string the information extracted from
+%%% a <code>statem</code> model.
+%%% @param CallInfoList the information extracted from a
+%%% <code>statem</code> model, like the one produced by the function
+%%% {@link model_info/1}.
+%%% @see model_info/1
+-spec ppr_callinfos(CallInfoList :: [#call_info{}]) -> chars().
 ppr_callinfos([]) -> [];
 ppr_callinfos([#call_info{
 		  name = Name,
@@ -114,12 +135,45 @@ make_wildcard_record({RecordName, RecordFields}) ->
 	 erl_syntax:variable(create_arg_name(state, FieldName)))
        || {FieldName, _} <- RecordFields]).
 
+%%% @doc
+%%% Returns an atom with the name of the variable that
+%%% is used for holding the particular argument or result.
+%%% Before symbolically executing a callback in a <code>statem</code>
+%%% model, some variables are provided depending on the callback,
+%%% the number of arguments of the call and the record holding the state.
+%%% The names used for those variables are provided by this function.
+%%% @param Type the type of variable whose name we want to obtain.
+%%% It may be one of the following:
+%%% <ul>
+%%% <li><code>arg</code> - the second argument is the position
+%%% of the argument variable whose name we want to obtain.</li>
+%%% <li><code>result</code> - the second argument must be also the
+%%% atom <code>result</code>. Returns the name of the variable representing
+%%% the result of executing a call.</li>
+%%% <li><code>state</code> - the second argument is the name of
+%%% the field variable whose name we want to obtain.</li>
+%%% </ul>
+%%% @param Element the specific variable of the type we want to obtain
+%%% @return an atom with the name of the variable
+-spec create_arg_name(Type :: ('arg' | 'result' | 'state'), Element :: (integer() | 'result' | atom())) -> atom().
 create_arg_name(result, result) -> '__ResultArgVar__';
 create_arg_name(state, Atom) ->
     list_to_atom("__StateArgVar__" ++ atom_to_list(Atom));
 create_arg_name(arg, N) when is_integer(N) ->
     list_to_atom("__ArgVar_" ++ integer_to_list(N) ++ "__").
 
+%%% @doc
+%%% Uses the function initial_state/0 of a <code>statem</code>
+%%% model to extract information about the record that holds
+%%% the state in the module, (assuming it is a record, and it
+%%% does not change).
+%%% @param FileName the name of the file containing the model.
+%%% @return a tuple with the type of the record and a list
+%%% of tuples containing the name of the fields and their
+%%% default values in abstract syntax.
+-spec get_state_fields(FileName :: (atom() | string())) -> {RecordType :: atom(),
+							    [{FieldName :: atom(),
+							      DefaultValue :: syntaxTree()}]}.
 get_state_fields(FileName) ->
     LF = case see_logic:generate_logical_function({initial_state, 0}, [], FileName) of
 	     [LFi] -> LFi;

@@ -1,3 +1,4 @@
+%%%-------------------------------------------------------------------
 %%% @author Pablo Lamela <P.Lamela-Seijas@kent.ac.uk>
 %%% @copyright (C) 2014, Pablo Lamela Seijas
 %%% @doc
@@ -5,6 +6,7 @@
 %%% executions of a function in terms of its arguments
 %%% @end
 %%% Created : 21 Jan 2014 by Pablo Lamela
+%%%-------------------------------------------------------------------
 
 -module(see_logic).
 
@@ -22,7 +24,14 @@
 		   remove_apply_var/2]).
 -include("records.hrl").
 
+-type syntaxTree() :: any(). %%% as used in the syntax tools
 
+
+%%% @doc
+%%% Takes a list of strings and transforms them to abstract syntax.
+%%% @param ArgList list of strings to parse.
+%%% @return list of abstract syntax trees.
+-spec parse_args(ArgList :: [string()]) -> [syntaxTree()].
 parse_args([]) -> [];
 parse_args([Arg|Rest]) ->
     [begin
@@ -36,6 +45,14 @@ parse_args([Arg|Rest]) ->
 	 end
      end|parse_args(Rest)].
 
+%%% @doc
+%%% Parses a file and returns a list with the name, arity and
+%%% abstract syntax tree of each function.
+%%% @param FileName name of the function to parse.
+%%% @return a list with the names, arities and syntax trees of the
+%%% functions in the file provided.
+-spec get_funcs(FileName :: string()) ->
+		       [{{Name :: atom(), Arity :: integer()},[AST :: syntaxTree()]}].
 get_funcs(FileName) ->
     {ok, Parse} = epp:parse_file(FileName, [], []),
     [{{erl_syntax:atom_value(erl_syntax:function_name(Function)),
@@ -43,6 +60,17 @@ get_funcs(FileName) ->
       erl_syntax:function_clauses(Function)} ||
 	Function <- Parse, function =:= erl_syntax:type(Function)].
 
+%%% @doc
+%%% Extracts information about the records defined in the
+%%% file provided.
+%%% @param FileName name of the file whose record to
+%%% extract.
+%%% @return a list with the names of the records and
+%%% a list with names of fields and their default values.
+-spec get_record_definitions(FileName :: string()) ->
+				    [{RecordType :: atom(),
+				      [FieldInfo :: {FieldName :: atom(),
+						     AST :: syntaxTree()}]}].
 get_record_definitions(FileName) ->
     {ok, Parse} = epp:parse_file(FileName, [], []),
     [{erl_syntax:atom_value(Name),
@@ -55,6 +83,26 @@ get_record_definitions(FileName) ->
 	erl_syntax:atom_value(erl_syntax:attribute_name(El)) =:= 'record',
 	[Name, Fields] <- [erl_syntax:attribute_arguments(El)]].
 
+%%% @doc
+%%% Generates a list of possible outcomes for a function by
+%%% symbolically executing it with the symbolic arguments provided.
+%%% Possible outcomes are represented by <code>#expansion{}</code>
+%%% records. If the function cannot be analysed a tuple
+%%% with the atom <code>'not_expandable'</code> as its first
+%%% element will be returned. Functions called that belong
+%%% to the same module will also be analysed if possible.
+%%% @param RootFuncName the name of the function to analyse.
+%%% @param Args a list with syntax trees of the symbolic arguments
+%%% to use when symbolically executing the function.
+%%% @param FileName the name of the file to analyse.
+%%% @return a list with the possible outcomes or a tuple with
+%%% the atom <code>'not_expandable'</code> as its first
+%%% element.
+%%% @see parse_args/1
+-spec generate_logical_function(RootFuncName :: {FuncName :: atom(), Arity :: integer()},
+				Args :: [syntaxTree()],
+				FileName :: string()) -> [Possibility :: #expansion{}] |
+							 {'not_expandable', Error :: any()}.
 generate_logical_function(RootFuncName, Args, FileName) ->
     Expansion = add_record_definitions(make_expansion(), get_record_definitions(FileName)),
     IndexedSyntaxTree = get_funcs(FileName),
@@ -88,6 +136,27 @@ fold_through_args([], Expansions, _IndexedSyntaxTree) when is_list(Expansions) -
 fold_through_args([], Expansion, _) ->
     [Expansion].
 
+%%% @doc
+%%% Expands a list of possible outcomes through a function.
+%%% It exits with a term in the form
+%%% <code>{not_expandable, Reason}</code> if the function
+%%% cannot be expanded.
+%%% @param Func the abstract syntax tree of the function
+%%% to expand.
+%%% @param Expansions The original list of outcomes to
+%%% expand through the function. If only one outcome is
+%%% needed it does not need to be inside a list.
+%%% @param IndexedSyntaxTree A list of abstract syntax
+%%% trees of functions that may be called from the
+%%% function to analyse. It has the same format
+%%% than the list returned by the function {@link get_funcs/1}.
+%%% @return the updated list of outcomes. It may
+%%% have more elements than the original list.
+%%% @see get_funcs/1
+-spec expand_function(Func :: syntaxTree(), Expansions :: ([#expansion{}] | #expansion{}),
+		      IndexedSyntaxTree :: [{{Name :: atom(), Arity :: integer()},
+					     [AST :: syntaxTree()]}]) ->
+			     UpdatedExpansions :: [#expansion{}].
 expand_function(Func, Expansions, IndexedSyntaxTree)
   when is_list(Expansions) ->
     case (simplify_not_exp(Expansions)) of
@@ -701,6 +770,14 @@ prefix_fin(Context) ->
 rename(Arg, Ori, Fin) ->
     do_rename(Arg, rename_fun(Ori, Fin)).
 
+%%% @doc
+%%% Applies a function from atom to atom to
+%%% all the variable names of a syntax tree.
+%%% @param Arg the syntax tree to rename
+%%% @param Fun the function from atom to atom
+%%% @return the updated syntax tree
+%%% @see renamers/2
+-spec do_rename(Arg :: syntaxTree(), Fun :: fun((atom()) -> atom())) -> syntaxTree().
 do_rename(Arg, RenameFun) ->
     do_rename(erl_syntax:type(Arg), Arg, RenameFun).
 do_rename(variable, Arg, RenameFun) ->
@@ -713,6 +790,25 @@ do_rename(_, Arg, RenameFun) ->
 	true -> Arg
     end.
 
+%%% @doc
+%%% Creates two functions, one for atoms, and
+%%% one for syntax trees that add, remove or
+%%% change the prefix context label,
+%%% (&quot;<code>%CTXT-N%</code>&quot;
+%%% where N is the number of context), to
+%%% the atom and to the variable names in the
+%%% syntax tree respectively.
+%%% Context is specified by either the atom <code>normal</code>,
+%%% that represents no context, or by an integer, that represents
+%%% the context number specified.
+%%% The functions returned will remove, add or change the label
+%%% accordingly.
+%%% @param Ori Initial context.
+%%% @param Fin Final context.
+%%% @return a tuple with both renaming functions
+%%% @see do_rename/2
+-spec renamers(Ori :: ('normal' | integer()), Fin :: ('normal' | integer())) ->
+		      {fun((atom()) -> atom()),fun((syntaxTree()) -> syntaxTree())}.
 renamers(Ori, Fin) ->
     RenameFun = rename_fun(Ori, Fin),
     {RenameFun, fun (AST) -> do_rename(AST, RenameFun) end}.
