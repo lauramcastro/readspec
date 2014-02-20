@@ -18,3 +18,12 @@
 -define(WHEN,  "When ").
 -define(THEN,  "Then ").
 -define(EMPTY, []).
+
+-define(OPERAND, "I have ").
+-define(INTEGER, "the integer ").
+-define(BOOLEAN, "the boolean ").
+-define(ATOM,    "the atom ").
+-define(STRING,  "the string ").
+-define(LIST,    "the list ").
+-define(TUPLE,   "the tuple ").
+-define(UNKNOWN, "the input value ").

@@ -42,10 +42,13 @@ cucumberise_suite(Model, Suite) ->
 	FeatureName = erlang:atom_to_list(Model) -- "_eqc",
 	Scenarios = cucumberise_testcases(Suite, []),
 	erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
+						  erl_syntax:comment(?EMPTY),
 						  erl_syntax:comment(2, [readspec_inspect:model_description(Model)])] ++
 							 [ erl_syntax:form_list([erl_syntax:comment(?EMPTY),
+													 erl_syntax:comment(?EMPTY),
 													 erl_syntax:string(?SCENARIO ++ readspec_inspect:property_description(Model, "don't know the property")),
-													 Scenario]) || Scenario <- Scenarios ] ).
+													 Scenario,
+													 erl_syntax:comment(?EMPTY)]) || Scenario <- Scenarios ] ).
 
 
 cucumberise_testcases([], CucumberisedTestCases) ->
@@ -86,11 +89,13 @@ explain({call,_Module,Function,Args}, MoreSteps) ->
 		explain_also(MoreSteps) ++
 	" THEN ** insert property postcondition here ** ";
 explain(Values, []) ->
-	[erl_syntax:string(?GIVEN),
+	[erl_syntax:comment(?EMPTY),
+	 erl_syntax:string(?GIVEN),
 	 erl_syntax:form_list(enumerate_list(Values)),
 	 erl_syntax:string(?THEN  ++ 
 						   readspec_inspect:property_definition("don't know the module here",
-																"don't know the function here"))].
+																"don't know the function here")),
+	 erl_syntax:comment(?EMPTY)].
 
 
 explain_also([]) ->
@@ -104,10 +109,42 @@ explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 enumerate_list(Tuple) when is_tuple(Tuple) ->
 	enumerate_list(erlang:tuple_to_list(Tuple));
 enumerate_list(List) when is_list(List) ->
-	L = [[erl_syntax:string(?AND), erl_syntax:abstract(X)] || X <- List],
+	L = [identify(X) || X <- List],
 	[_H | T] = lists:flatten(L),
 	T.
 
+identify(X) ->
+	ASTofX = erl_syntax:abstract(X),
+	[erl_syntax:string(?AND), 
+	 erl_syntax:string(?OPERAND),
+	 erl_syntax:string(type_of(X)), %% TODO: check consistency with property definition
+	 ASTofX,
+	 erl_syntax:comment(?EMPTY)].
+
+type_of([]) ->
+	?LIST;
+type_of(X) when is_integer(X) ->
+	?INTEGER;
+type_of(X) when is_boolean(X) ->
+	?BOOLEAN;
+type_of(X) when is_atom(X) ->
+	?ATOM;
+type_of(X) when is_list(X) ->
+	case is_string(X) of
+		true  -> ?STRING;
+		false -> ?LIST
+	end;
+type_of(X) when is_tuple(X) ->
+	?TUPLE;
+type_of(_) ->
+	?UNKNOWN.
+
+is_string(X) ->
+	is_list(X) andalso lists:all(fun(C) -> is_char(C) end, X).
+
+is_char(C) when is_integer(C) ->
+	((32 =< C) andalso (C =< 126)) orelse ((161 =< C) andalso (C =< 255)).
+	
 
 clean(StringStream) ->
 	trim_lines(lists:filter(fun($") -> false;
@@ -117,14 +154,11 @@ clean(StringStream) ->
 						 
 trim_lines([]) ->
 	[];
-trim_lines([H]) ->
-	[H];
-trim_lines([H1,H2]) ->
-	[H1,H2];
-trim_lines([H1,H2,H3]) ->
-	[H1,H2,H3];
-trim_lines([$\n, $\n | T]) ->
+trim_lines([$\n, $\n, $\n, $\n | T]) ->
+	[$\n, $\n | trim_lines(T)];
+trim_lines([$\n, $\n, $n | T]) ->
 	[$\n | trim_lines(T)];
+trim_lines([$\n, $\n | T]) ->
+	trim_lines(T);
 trim_lines([H|T]) ->
 	[H | trim_lines(T)].
-
