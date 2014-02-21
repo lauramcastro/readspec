@@ -17,7 +17,8 @@
 	 get_result_var_name/0, scan_and_print_model/1,
 	 idiomize_model_info/1, print_model_info/1,
 	 print_model_info_to_str/1, print_exp_iface/1,
-	 print_exp_iface_to_str/1, scan_and_print_model_to_str/1]).
+	 print_exp_iface_to_str/1, scan_and_print_model_to_str/1,
+	 rename_vars_in_model/2]).
 
 -include("records.hrl").
 
@@ -140,6 +141,19 @@ scan_and_print_model(FileName) ->
     Model = scan_model(FileName),
     IdiomizedModel = idiomizer:idiomize_module_info(Model),
     print_model_info(IdiomizedModel).
+
+%%% @doc
+%%% Renames a list of variables inside a model.
+%%% @param RenamingList list of variables to
+%%% rename and their renamings.
+%%% @param ModelInfo record with the information extracted
+%%% from a model.
+%%% @return record with the information from the model
+%%% updated
+-spec rename_vars_in_model(RenamingList :: [{OriginalName :: atom(), FinalName :: atom()}],
+					    ModelInfo :: #module_iface{}) -> #module_iface{}.
+rename_vars_in_model(RenamingList, ModelInfo) ->
+    see_logic:rename_vars_in_model(RenamingList, ModelInfo).
 
 %%% @doc
 %%% Extracts and prints nicely to a string information from a model.

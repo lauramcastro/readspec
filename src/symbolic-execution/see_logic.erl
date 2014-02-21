@@ -11,7 +11,7 @@
 -module(see_logic).
 
 -export([get_funcs/1, get_record_definitions/1, generate_logical_function/3, expand_function/3,
-	 renamers/2, do_rename/2, parse_args/1]).
+	 renamers/2, do_rename/2, parse_args/1, rename_vars_in_model/2]).
 
 -import(nestcond, [make_expansion/0, set_result/2, add_arg_if_not_bound/2,
 		   set_func_patmatcha/2, set_case_patmatcha/2, clear_patmatcha/1,
@@ -842,3 +842,22 @@ save_thiscontext(Expansion) ->
 load_thiscontext(Expansion) ->
     Context = get_context(Expansion),
     recontext(Expansion, renamers(Context, normal)).
+
+
+%%% @doc
+%%% Renames a list of variables inside a model.
+%%% @param RenamingList list of variables to
+%%% rename and their renamings.
+%%% @param ModelInfo record with the information extracted
+%%% from a model.
+%%% @return record with the information from the model
+%%% updated
+-spec rename_vars_in_model(RenamingList :: [{OriginalName :: atom(), FinalName :: atom()}],
+					    ModelInfo :: #module_iface{}) -> #module_iface{}.
+rename_vars_in_model([{OriginalName, FinalName}|Rest], ModelInfo) ->
+    RenameAtomFun = fun (Match) when (Match =:= OriginalName) -> FinalName;
+			(Else) -> Else end,
+    RenameASTFun = fun (AST) -> do_rename(AST, RenameAtomFun) end,
+    MappingFun = fun (Expansion) -> recontext(Expansion, {RenameAtomFun, RenameASTFun}) end,
+    rename_vars_in_model(Rest, clean_nestcond:map_model_expansions(MappingFun, ModelInfo));
+rename_vars_in_model([], ModelInfo) -> ModelInfo.
