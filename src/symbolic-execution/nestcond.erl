@@ -692,7 +692,7 @@ ppr_apply(#apply{name = Name, is_call = true,
      [ppr_argument(Idioms, Arg) || Arg <- Args],
      io_lib:format("~n", [])];
 ppr_apply(#apply{name = Name, is_arg = true}, _Idioms) ->
-    io_lib:format("[*] We define the variable \"~s\" just as the argument provided~n~n", [atom_to_list(Name)]);
+    io_lib:format("[*] We define the variable \"~s\" just as in the arguments provided~n~n", [atom_to_list(Name)]);
 ppr_apply(#apply{name = Name, evaluated = true, value = Value}, Idioms) ->
     [io_lib:format("[*] We define the variable \"~s\" as equal to:~n", [atom_to_list(Name)]),
      io_lib:format("     ~s~n~n", [explain_ast(Value, Idioms, 5)])].
