@@ -9,7 +9,7 @@
 
 -export([idiom_template_list/1]).
 -import(idiomizer, [tsatom_val/2, tsint_val/2, tsvar_name/2, tsvar_id/2,
-		    tcontainer/2, tvar/2, tobj/2, tsvar_name_and_id/3, tsoneellist_elid/2]).
+		    tcontainer/2, tvar/2, tobj/2, tsvar_name_and_id/3, tssingleton_elid/2]).
 -include("records.hrl").
 -include("template_recs.hrl").
 
@@ -112,7 +112,7 @@ append_one_el_list_idiom(Ref) ->
 					   call = append,
 					   arg_list = [tsvar_name(
 							 Ref, tvar(Ref, 'collection_varname')), 
-						       tsoneellist_elid(
+						       tssingleton_elid(
 							 Ref, tsvar_name(
 								Ref, tvar(Ref, 'element_varname')))],
 					   is_call = true,

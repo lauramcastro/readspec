@@ -34,7 +34,7 @@
 
 -export([idiomize_module_info/1,
 	 tsatom_val/2, tsint_val/2, tsvar_name/2, tsvar_name_and_id/3, tsvar_id/2,
-	 tvar/2, tobj/2, extract_vars/4, replace_vars/3, tsoneellist_elid/2]).
+	 tvar/2, tobj/2, extract_vars/4, replace_vars/3, tssingleton_elid/2]).
 
 -include("records.hrl").
 -include("template_recs.hrl").
@@ -452,9 +452,9 @@ tsvar_name_and_id(Ref, Name, Value) ->
 	  {identity, Value}]).
 
 %%% @doc
-%%% Creates a template that matches a list with one element in abstract syntax.
-%%% It uses {@link tobj/2} underneath and because of that it cannot be
-%%% used with {@link replace_vars/3}.
+%%% Creates a template that matches a list with one element (singleton)
+%%% in abstract syntax. It uses {@link tobj/2} underneath and because of
+%%% that it cannot be used with {@link replace_vars/3}.
 %%% @param Ref the reference used to create the tags in the template, it is used
 %%% to reliably tell apart items that are template tags from those that are not,
 %%% which allows the use of several kinds of templates in the same structure.
@@ -462,8 +462,8 @@ tsvar_name_and_id(Ref, Name, Value) ->
 %%% erl_syntax:list_head/1 of the target Erlang term.
 %%% @return the corresponding "template tag"
 %%% @see extract_vars/4
--spec tsoneellist_elid(Ref :: reference(), Template :: term()) -> TemplateTag :: #tcontainer{}.
-tsoneellist_elid(Ref, Value) ->
+-spec tssingleton_elid(Ref :: reference(), Template :: term()) -> TemplateTag :: #tcontainer{}.
+tssingleton_elid(Ref, Value) ->
     tobj(Ref,
 	 [{{erl_syntax, list_length}, 1},
 	  {{erl_syntax, list_head}, Value}]).
