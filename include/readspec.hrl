@@ -11,12 +11,12 @@
 
 -define(DEBUG(IOString, Args), io:format(IOString, Args)).
 
--define(FEATURE,  "Feature: ").
--define(SCENARIO, "Scenario: ").
--define(GIVEN, "Given ").
--define(AND,   "And ").
--define(WHEN,  "When ").
--define(THEN,  "Then ").
+-define(FEATURE,  "FEATURE: ").
+-define(SCENARIO, "SCENARIO: ").
+-define(GIVEN, "GIVEN ").
+-define(AND,   "AND ").
+-define(WHEN,  "WHEN ").
+-define(THEN,  "THEN ").
 -define(EMPTY, []).
 
 -define(OPERAND, "I have ").
