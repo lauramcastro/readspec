@@ -15,86 +15,90 @@
 
 -include("readspec.hrl").
 
-suite(Model, {Module, Fun, Args}, NumTests) ->
-	?DEBUG("Compiling module ~p~n", [Model]),
-	ModelFile = erlang:atom_to_list(Model) ++ ".erl",
-	FeatureFile = erlang:atom_to_list(Model) ++ ".feature",
-	{ok, ModelName} = cover:compile(ModelFile), % {module, ModelName} = smother:compile(ModelFile),
+suite(Module, Property, NumTests) ->
+	?DEBUG("Compiling module ~p~n", [Module]),
+	File = erlang:atom_to_list(Module) ++ ".erl",
+	FeatureFile = erlang:atom_to_list(Module) ++ ".feature",
+	{ok, ModelName} = cover:compile(File), % {module, ModelName} = smother:compile(ModelFile),
 	?DEBUG("Generating set of ~p test cases~n", [NumTests]),
-	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Model, eqc:numtests(NumTests, erlang:apply(Module, Fun, Args)))),
+	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Module,
+															eqc:numtests(NumTests,
+																		 erlang:apply(Module, Property, [])))),
     %%% [removable here downwards]
 	?DEBUG("Ensuring coverage~n", []),
 	ok = cover:reset(ModelName), % smother does not have this
-	[] = eqc_suite:run(erlang:apply(Module, Fun, Args), Suite),
+	[] = eqc_suite:run(erlang:apply(Module, Property, []), Suite),
 	{ok, _CoverFile} = cover:analyse_to_file(ModelName), % {ok, _CoverFile} = smother:analyse_to_file(ModelName),
     %%% [removable up to here]
 	?DEBUG("Cucumberising set of test cases~n", []),
 	ok = file:write_file(FeatureFile,
-						 clean(erl_prettypr:format(cucumberise_suite(Model, Fun, eqc_suite:cases(Suite)),
+						 clean(erl_prettypr:format(cucumberise_suite(Module, Property, eqc_suite:cases(Suite)),
 												   [{encoding, utf8}, {paper, 120}, {ribbon, 120}]))).
 
 counterexample(Counterexample) ->
-	cucumberise_teststeps_aux(Counterexample, []).
+	cucumberise_teststeps_aux(unknown, unknown, Counterexample, []).
 
 %%% -------------------------------------------------------------- %%%
 
-cucumberise_suite(Model, Property, Suite) ->
-	FeatureName = erlang:atom_to_list(Model) -- "_eqc",
-	Scenarios = cucumberise_testcases(Suite, []),
+cucumberise_suite(Module, Property, Suite) ->
+	FeatureName = erlang:atom_to_list(Module) -- "_eqc",
+	Scenarios = cucumberise_testcases(Module, Property, Suite, []),
 	erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
 						  erl_syntax:comment(?EMPTY),
-						  erl_syntax:comment(2, [readspec_inspect:model_description(Model)])] ++
+						  erl_syntax:comment(2, [readspec_inspect:model_description(Module)])] ++
 							 [ erl_syntax:form_list([erl_syntax:comment(?EMPTY),
 													 erl_syntax:comment(?EMPTY),
-													 erl_syntax:string(?SCENARIO ++ readspec_inspect:property_description(Model, Property)),
+													 erl_syntax:string(?SCENARIO ++
+																		   readspec_inspect:property_description(Module, Property)),
 													 Scenario,
 													 erl_syntax:comment(?EMPTY)]) || Scenario <- Scenarios ] ).
 
 
-cucumberise_testcases([], CucumberisedTestCases) ->
+cucumberise_testcases(_Module, _Property, [], CucumberisedTestCases) ->
 	CucumberisedTestCases;
-cucumberise_testcases([TestCase | MoreTestCases], CucumberisedTestCases) ->
-	cucumberise_testcases(MoreTestCases, [cucumberise_teststeps(TestCase) | CucumberisedTestCases]).
+cucumberise_testcases(Module, Property, [TestCase | MoreTestCases], CucumberisedTestCases) ->
+	cucumberise_testcases(Module, Property, MoreTestCases, [cucumberise_teststeps(Module, Property, TestCase) | CucumberisedTestCases]).
 
 
-cucumberise_teststeps([TestCase]) ->
-	cucumberise_teststeps_aux(TestCase, []);
-cucumberise_teststeps(TestCase) ->
-	cucumberise_teststeps_aux(TestCase, []).
+cucumberise_teststeps(Module, Property, [TestCase]) ->
+	cucumberise_teststeps_aux(Module, Property, TestCase, []);
+cucumberise_teststeps(Module, Property, TestCase) ->
+	cucumberise_teststeps_aux(Module, Property, TestCase, []).
 
-cucumberise_teststeps_aux([], CucumberisedTestSteps) ->
-	erl_syntax:form_list(cucumberise({scenario, lists:reverse(CucumberisedTestSteps)}));
+cucumberise_teststeps_aux(Module, Property, [], CucumberisedTestSteps) ->
+	erl_syntax:form_list(cucumberise(Module, Property,
+									 {scenario, lists:reverse(CucumberisedTestSteps)}));
 % tests for QC properties
-cucumberise_teststeps_aux(Values, []) when is_tuple(Values) ->
-	erl_syntax:form_list(cucumberise({scenario, Values}));
+cucumberise_teststeps_aux(Module, Property, Values, []) when is_tuple(Values) ->
+	erl_syntax:form_list(cucumberise(Module, Property,
+									 {scenario, Values}));
 % test steps for QC state machines
-cucumberise_teststeps_aux([{set,_,Call={call,_Module,_Function,_Args}} | MoreSteps], CucumberisedTestSteps) ->
-	cucumberise_teststeps_aux(MoreSteps, [Call | CucumberisedTestSteps]).
+cucumberise_teststeps_aux(Module, Property, [{set,_,Call={call,_Module,_Function,_Args}} | MoreSteps], CucumberisedTestSteps) ->
+	cucumberise_teststeps_aux(Module, Property, MoreSteps, [Call | CucumberisedTestSteps]).
 
 
 % we remove spureous cases such as {scenario, []}
-cucumberise({scenario, []}) ->
+cucumberise(_Module, _Property, {scenario, []}) ->
 	erl_syntax:nil();
 % cucumberise QC property scenario
-cucumberise({scenario, Values}) when is_tuple(Values) ->
-	explain(Values, []);
+cucumberise(Module, Property, {scenario, Values}) when is_tuple(Values) ->
+	explain(Module, Property, Values, []);
 % cucumberise QC state machine scenario
-cucumberise({scenario, [Call={call,_Module,_Function,_Args} | MoreSteps]}) ->
-	explain(Call, MoreSteps).
+cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->
+	explain(Module, Property, Call, MoreSteps).
 
 
-explain({call,_Module,Function,Args}, MoreSteps) ->
+explain(_Module, _Property, {call,_,Function,Args}, MoreSteps) ->
 	"GIVEN " ++ enumerate_list([Args]) ++
     " WHEN " ++ io_lib:fwrite("~p", [Function]) ++
 		explain_also(MoreSteps) ++
 	" THEN ** insert property postcondition here ** ";
-explain(Values, []) ->
+explain(Module, Property, Values, []) ->
 	[erl_syntax:comment(?EMPTY),
 	 erl_syntax:string(?GIVEN),
 	 erl_syntax:form_list(enumerate_list(Values)),
 	 erl_syntax:string(?THEN  ++ 
-						   readspec_inspect:property_definition("don't know the module here",
-																"don't know the function here")),
+						   readspec_inspect:property_definition(Module, Property)),
 	 erl_syntax:comment(?EMPTY)].
 
 
