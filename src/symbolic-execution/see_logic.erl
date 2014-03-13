@@ -778,6 +778,8 @@ rename(Arg, Ori, Fin) ->
 %%% @return the updated syntax tree
 %%% @see renamers/2
 -spec do_rename(Arg :: syntaxTree(), Fun :: fun((atom()) -> atom())) -> syntaxTree().
+do_rename(none, _RenameFun) ->
+    erl_syntax:nil();
 do_rename(Arg, RenameFun) ->
     do_rename(erl_syntax:type(Arg), Arg, RenameFun).
 do_rename(variable, Arg, RenameFun) ->
