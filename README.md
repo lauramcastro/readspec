@@ -3,7 +3,7 @@ readSpec
 
 *readSpec*: making PBT easier to read for humans.
 
-###d ependencies
+### dependencies
 
 In order to use `readSpec` you need a QuickCheck licence.
 
