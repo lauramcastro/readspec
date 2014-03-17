@@ -1,7 +1,7 @@
 readSpec
 ========
 
-*readSpec*: making PBT easier to read for humans.
+`readSpec`: making PBT easier to read for humans.
 
 ### dependencies
 
