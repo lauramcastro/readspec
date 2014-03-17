@@ -5,7 +5,7 @@ readSpec
 
 ### dependencies
 
-In order to use `readSpec` you need a QuickCheck licence.
+In order to use `readSpec` you need a [Quviq QuickCheck](http://www.quviq.com) licence.
 
 ### compiling & running
 
