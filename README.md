@@ -21,8 +21,10 @@ in the `priv` folder.
    This module contains a property to test the `delete` operation of the `lists`
    module. By running:
 
+
     cd(priv).
     readspec:suite(simple_eqc, prop_simple).
+
 
    you will get a `?MODULE.feature` file with some samples of test cases that
    QuickCheck would run when testing the property, written in human-readable,
@@ -31,13 +33,17 @@ in the `priv` folder.
    Now, the `prop_simple` property is faulty, as you can see if you run a
    sufficient number of test cases:
 
+
     eqc:quickcheck(eqc:numtests(1000, simple_eqc:prop_simple())).
+
 
    The counterexamples that QuickCheck returns can also be saved to a
    `?PROPERTY.counterexample.feature` in the same human-readable,
    semi-natural, Cucumber-like format by running:
 
+
     readspec:counterexample(simple_eqc, prop_simple, eqc:current_counterexample()).
+
 
 Enjoy! And do not forget that comments & bug reports, as well as contributions,
 are welcome!
