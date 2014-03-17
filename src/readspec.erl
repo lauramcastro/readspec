@@ -11,32 +11,31 @@
 
 -module(readspec).
 
--export([suite/3, counterexample/1]).
+-export([suite/2, counterexample/3]).
 
 -include("readspec.hrl").
 
+suite(Module, Property) ->
+	suite(Module, Property, 50).
+
 suite(Module, Property, NumTests) ->
-	?DEBUG("Compiling module ~p~n", [Module]),
-	File = erlang:atom_to_list(Module) ++ ".erl",
+	?DEBUG("Cover-compiling module: ~p~n", [Module]),
 	FeatureFile = erlang:atom_to_list(Module) ++ ".feature",
-	{ok, ModelName} = cover:compile(File), % {module, ModelName} = smother:compile(ModelFile),
-	?DEBUG("Generating set of ~p test cases~n", [NumTests]),
-	Suite = eqc_suite:feature_based(eqc_suite:line_coverage(Module,
-															eqc:numtests(NumTests,
-																		 erlang:apply(Module, Property, [])))),
-    %%% [removable here downwards]
-	?DEBUG("Ensuring coverage~n", []),
-	ok = cover:reset(ModelName), % smother does not have this
-	[] = eqc_suite:run(erlang:apply(Module, Property, []), Suite),
-	{ok, _CoverFile} = cover:analyse_to_file(ModelName), % {ok, _CoverFile} = smother:analyse_to_file(ModelName),
-    %%% [removable up to here]
-	?DEBUG("Cucumberising set of test cases~n", []),
+	{ok, Module} = cover:compile(Module),
+	Suite = eqc_suite:coverage_based(Module,
+									 eqc:numtests(NumTests, erlang:apply(Module, Property, []))),
+	?DEBUG("Cucumberising set of test cases: ~p~n", [Suite]),
 	ok = file:write_file(FeatureFile,
 						 clean(erl_prettypr:format(cucumberise_suite(Module, Property, eqc_suite:cases(Suite)),
-												   [{encoding, utf8}, {paper, 120}, {ribbon, 120}]))).
+                                                   ?PRETTYPR_OPTIONS))).
 
-counterexample(Counterexample) ->
-	cucumberise_teststeps_aux(unknown, unknown, Counterexample, []).
+counterexample(Module, Property, [Counterexample]) ->
+	FeatureFile = erlang:atom_to_list(Property) ++ ".counterexample.feature",
+	?DEBUG("Generating counterexample file: ~p~n", [FeatureFile]),
+	Scenario = cucumberise_teststeps_aux(Module, Property, Counterexample, []),
+	?DEBUG("Reversing scenario: ~p~n", [readspec_inspect:falsify(Scenario)]),
+	ok = file:write_file(FeatureFile, clean(erl_prettypr:format(readspec_inspect:falsify(Scenario),
+                                                                ?PRETTYPR_OPTIONS))).
 
 %%% -------------------------------------------------------------- %%%
 
@@ -55,7 +54,7 @@ cucumberise_suite(Module, Property, Suite) ->
 
 
 cucumberise_testcases(_Module, _Property, [], CucumberisedTestCases) ->
-	CucumberisedTestCases;
+	lists:reverse(CucumberisedTestCases);
 cucumberise_testcases(Module, Property, [TestCase | MoreTestCases], CucumberisedTestCases) ->
 	cucumberise_testcases(Module, Property, MoreTestCases, [cucumberise_teststeps(Module, Property, TestCase) | CucumberisedTestCases]).
 
@@ -90,9 +89,9 @@ cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->
 
 explain(_Module, _Property, {call,_,Function,Args}, MoreSteps) ->
 	"GIVEN " ++ enumerate_list([Args]) ++
-    " WHEN " ++ io_lib:fwrite("~p", [Function]) ++
-		explain_also(MoreSteps) ++
-	" THEN ** insert property postcondition here ** ";
+		" WHEN " ++ io_lib:fwrite("~p", [Function]) ++
+		            explain_also(MoreSteps) ++
+		" THEN ** insert property postcondition here ** ";
 explain(Module, Property, Values, []) ->
 	[erl_syntax:comment(?EMPTY),
 	 erl_syntax:string(?GIVEN),
@@ -107,6 +106,7 @@ explain_also([]) ->
 explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 	" AND " ++ io_lib:fwrite("~p", [Function]) ++
 		explain_also(MoreSteps).
+
 
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
@@ -148,14 +148,14 @@ is_string(X) ->
 
 is_char(C) when is_integer(C) ->
 	((32 =< C) andalso (C =< 126)) orelse ((161 =< C) andalso (C =< 255)).
-	
+
 
 clean(StringStream) ->
 	trim_lines(lists:filter(fun($") -> false;
 							   ($%) -> false;
 							   (_C) -> true   end,
 							StringStream)).
-						 
+
 trim_lines([]) ->
 	[];
 trim_lines([$\n, $\n, $\n, $\n | T]) ->

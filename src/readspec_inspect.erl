@@ -9,11 +9,13 @@
 
 -module(readspec_inspect).
 
+-include("readspec.hrl").
 -include("records.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 -export([model_description/1, property_description/2]).
 -export([property_definition/3, property_definition/4]).
+-export([falsify/1]).
 
 %% @doc Extracts the module description from the edoc comments on the source code
 %% @end
@@ -24,7 +26,7 @@ model_description(ModelModule) ->
 %% @doc Extracts the property description from the edoc comments on the source code
 %% @end
 -spec property_description(ModelModule :: atom(),
-						   PropertyName :: atom()) -> PropertyDescription :: string().
+                           PropertyName :: atom()) -> PropertyDescription :: string().
 property_description(ModelModule, PropertyName) ->
 	extract_function_description(ModelModule, PropertyName).
 
@@ -45,8 +47,14 @@ property_definition(ModelModule, PropertyName, Arguments, Values) ->
 	ValuesAsAtoms = [to_atom(Value) || Value <- tuple_to_list(Values)],
 	[Exp] = see:scan_func_str_args(FullModelModuleName, PropertyName, Arguments),
 	extract_property_definition(Exp, ValuesAsAtoms).
-	
 
+
+%% @doc Reverses the truth value of a given property (for counterexample explanation).
+%% @end
+-type syntaxTree() :: any(). % as used in the OTP syntax tools (erl_syntax)
+-spec falsify(Scenario :: syntaxTree()) -> syntaxTree().
+falsify(Scenario) ->
+	falsify_aux(Scenario).
 
 %%% -------------------------------------------------------------- %%%
 
@@ -92,7 +100,13 @@ extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
 	[FunDef] = lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- App#apply.arg_list]),
 	[FunBody] = erl_syntax:clause_body(FunDef),
-	erl_prettypr:format(replace_values(FunBody, Values)).
+	?DEBUG("Pretty-printing: ~p~n", [{FunBody,replace_values(FunBody, Values)}]),
+	case replace_values(FunBody, Values) of
+		{op,_,'not',Property} ->
+			erl_prettypr:format(Property) ++ ?ISFALSE;
+		Property ->
+			erl_prettypr:format(Property)
+	end.
 
 replace_values(Exp, Values) ->
 	{NewExp,_NotBindedValues,_BindedValues} = transverse_exp(Exp, Values, []),
@@ -120,15 +134,36 @@ transverse_exp(Exp, Values, UsedValues) when is_list(Exp) ->
 				end, {[], Values, UsedValues}, Exp);
 transverse_exp(Exp, Values, UsedValues) ->
 	{Exp, Values, UsedValues}.
-	
+
+
+falsify_aux({tree,form_list,Attributes,List}) ->
+	{tree,form_list,Attributes,falsify(List)};
+falsify_aux(Term = {tree,string,Attributes,Text}) ->
+	[First | Words] = string:tokens(Text, " "),
+	case string:equal(First, string:strip(?THEN)) of
+		true ->
+			[Last, PrevToLast | RestOfWords] = lists:reverse(Words),
+			case string:equal(PrevToLast ++ " " ++ Last, string:strip(?ISFALSE)) of
+				true ->
+					{tree,string,Attributes,lists:flatten([[First, 32], lists:reverse(RestOfWords), ?ISTRUE])};
+				false ->
+					{tree,string,Attributes,lists:flatten([[First, 32], lists:reverse(RestOfWords), ?ISFALSE])}
+			end;
+		false ->
+			Term
+	end;
+falsify_aux(TermList) when is_list(TermList) ->	
+	[falsify(Term) || Term <- TermList];
+falsify_aux(Other) ->	
+	Other.
 
 to_atom(Term) when is_integer(Term) ->
-	list_to_atom(integer_to_list(Term));
+	list_to_atom(to_list(Term));
 to_atom([]) ->
 	'[]';
 to_atom(Term) when is_list(Term) ->
-	list_to_atom(Term).
+	List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_list(T) ++ ","  end, "[", Term),
+	list_to_atom(string:substr(List, 1, length(List)-1) ++ "]").
 
-%    {ok, Forms} = epp:parse_file(FileName, [], []),
-%    Comments = erl_comment_scan:file(FileName),
-%    AST = erl_recomment:recomment_forms(Forms, Comments),
+to_list(Term) when is_integer(Term) ->
+	integer_to_list(Term).

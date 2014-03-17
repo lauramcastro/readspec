@@ -9,7 +9,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--define(DEBUG(IOString, Args), io:format(IOString, Args)).
+%-define(DEBUG(IOString, Args), io:format(IOString, Args)).
+-define(DEBUG(IOString, Args), ok).
 
 -define(FEATURE,  "FEATURE: ").
 -define(SCENARIO, "SCENARIO: ").
@@ -27,3 +28,8 @@
 -define(LIST,    "the list ").
 -define(TUPLE,   "the tuple ").
 -define(UNKNOWN, "the input value ").
+
+-define(ISFALSE, " IS FALSE.").
+-define(ISTRUE,  " IS TRUE.").
+
+-define(PRETTYPR_OPTIONS, [{encoding, utf8}, {paper, 120}, {ribbon, 120}]).
