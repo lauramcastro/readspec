@@ -5,7 +5,8 @@ readSpec
 
 ### dependencies
 
-In order to use `readSpec` you need a [Quviq QuickCheck](http://www.quviq.com) licence.
+In order to use `readSpec` you need a [Quviq QuickCheck](http://www.quviq.com)
+licence.
 
 ### compiling & running
 
@@ -60,6 +61,9 @@ and uncommenting the following one:
     -define(DEBUG(IOString, Args), io:format(IOString, Args)).
 
 You can slightly alter the output format (i.e. line length) by modifying the
-`PRETTYPR_OPTIONS` macro in that same file.
+`PRETTYPR_OPTIONS` macro in that same file:
 
     -define(PRETTYPR_OPTIONS, [{encoding, utf8}, {paper, 120}, {ribbon, 120}]).
+
+where acceptable options are those described for the `format/2` function in the
+[erl_prettypr](http://erlang.org/doc/man/erl_prettypr.html) module.
