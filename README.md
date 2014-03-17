@@ -1,15 +1,13 @@
-readspec
+readSpec
 ========
 
-ReadSpec application: making PBT easier to read for humans.
+*readSpec*: making PBT easier to read for humans.
 
-dependencies
-------------
+###d ependencies
 
 In order to use `readSpec` you need a QuickCheck licence.
 
-compiling & running
--------------------
+### compiling & running
 
 Just clone the repository and execute:
 
@@ -44,8 +42,7 @@ in the `priv` folder.
 Enjoy! And do not forget that comments & bug reports, as well as contributions,
 are welcome!
 
-troubleshooting
----------------
+### troubleshooting
 
 You can enable some debugging messages by commenting out the following line in
 the `include/readspec.hrl` file:
