@@ -13,7 +13,7 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 -export([model_description/1, property_description/2]).
--export([property_definition/2, property_definition/3]).
+-export([property_definition/3, property_definition/4]).
 
 %% @doc Extracts the module description from the edoc comments on the source code
 %% @end
@@ -31,18 +31,21 @@ property_description(ModelModule, PropertyName) ->
 %% @doc Extracts the body of a property as a string from the source code
 %% @end
 -spec property_definition(ModelModule :: atom(),
-						  PropertyName :: atom()) -> PropertyBody :: string().
-property_definition(ModelModule, PropertyName) ->
-	property_definition(ModelModule, PropertyName, []).
+						  PropertyName :: atom(),
+						  Values :: tuple()) -> PropertyBody :: string().
+property_definition(ModelModule, PropertyName, Values) ->
+	property_definition(ModelModule, PropertyName, [], Values).
 
 -spec property_definition(ModelModule :: atom(),
 						  PropertyName :: atom(),
-						  Args :: term()) -> PropertyBody :: string().
-property_definition(ModelModule, PropertyName, Arguments) ->
+						  Args :: term(),
+						  Values :: tuple()) -> PropertyBody :: string().
+property_definition(ModelModule, PropertyName, Arguments, Values) ->
 	FullModelModuleName = list_to_atom(atom_to_list(ModelModule) ++ ".erl"),
+	ValuesAsAtoms = [to_atom(Value) || Value <- tuple_to_list(Values)],
 	[Exp] = see:scan_func_str_args(FullModelModuleName, PropertyName, Arguments),
-	extract_property_definition(Exp).
-
+	extract_property_definition(Exp, ValuesAsAtoms).
+	
 
 
 %%% -------------------------------------------------------------- %%%
@@ -82,14 +85,49 @@ get_xml_version(Module) ->
 
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
-extract_property_definition(Exp) when is_record(Exp, exp_iface) ->
+extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
 	[AppDef] = Exp#exp_iface.var_defs,
-	extract_property_definition_aux(AppDef).
+	extract_property_definition_aux(AppDef, Values).
 
-extract_property_definition_aux(App) when is_record(App, apply) ->
+extract_property_definition_aux(App, Values) when is_record(App, apply) ->
 	[FunDef] = lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- App#apply.arg_list]),
 	[FunBody] = erl_syntax:clause_body(FunDef),
-	erl_prettypr:format(FunBody).
+	erl_prettypr:format(replace_values(FunBody, Values)).
+
+replace_values(Exp, Values) ->
+	{NewExp,_NotBindedValues,_BindedValues} = transverse_exp(Exp, Values, []),
+	NewExp.
+
+transverse_exp({var,N,Name}, [Value|MoreValues], UsedValues) when is_atom(Name) ->
+	case lists:keyfind(Name, 1, UsedValues) of
+		false ->
+			{{var,N,Value}, MoreValues, [{Name,Value}|UsedValues]};
+		{Name,UsedValue} ->
+			{{var,N,UsedValue}, [Value|MoreValues], UsedValues}
+	end;
+transverse_exp(Exp, Values, UsedValues) when is_tuple(Exp) ->
+	ExpList = tuple_to_list(Exp),
+	{NewExpList, LessValues, MoreUsedValues} = transverse_exp(ExpList, Values, UsedValues),
+	{list_to_tuple(NewExpList), LessValues, MoreUsedValues};
+transverse_exp(Exp, Values, UsedValues) when is_list(Exp) ->
+	lists:foldl(fun(Member, {RExp, Vs, UVs}) ->
+						case transverse_exp(Member, Vs, UVs) of
+							{{var,N,Value}, MoreValues, MoreUsedValues} ->
+								{RExp++[{var,N,Value}], MoreValues, MoreUsedValues};
+							{Other, MoreVs, MoreUsedVs} ->
+								{RExp++[Other], MoreVs, MoreUsedVs}
+						end
+				end, {[], Values, UsedValues}, Exp);
+transverse_exp(Exp, Values, UsedValues) ->
+	{Exp, Values, UsedValues}.
+	
+
+to_atom(Term) when is_integer(Term) ->
+	list_to_atom(integer_to_list(Term));
+to_atom([]) ->
+	'[]';
+to_atom(Term) when is_list(Term) ->
+	list_to_atom(Term).
 
 %    {ok, Forms} = epp:parse_file(FileName, [], []),
 %    Comments = erl_comment_scan:file(FileName),

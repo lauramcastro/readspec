@@ -98,7 +98,7 @@ explain(Module, Property, Values, []) ->
 	 erl_syntax:string(?GIVEN),
 	 erl_syntax:form_list(enumerate_list(Values)),
 	 erl_syntax:string(?THEN  ++ 
-						   readspec_inspect:property_definition(Module, Property)),
+						   readspec_inspect:property_definition(Module, Property, Values)),
 	 erl_syntax:comment(?EMPTY)].
 
 
