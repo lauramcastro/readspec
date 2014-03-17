@@ -40,7 +40,7 @@ in the `priv` folder.
     ````
 
    The counterexamples that QuickCheck returns can also be saved to a
-   `?PROPERTY.counterexample.feature` in the same human-readable,
+   `?PROPERTY.counterexample.feature` file in the same human-readable,
    semi-natural, Cucumber-like format by running:
 
     ````
