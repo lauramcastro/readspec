@@ -11,9 +11,7 @@ In order to use `readSpec` you need a [Quviq QuickCheck](http://www.quviq.com) l
 
 Just clone the repository and execute:
 
-    ````
     make && ./run
-    ````
 
 You should then see an erlang shell in which you can try the examples provided
 in the `priv` folder.
@@ -55,19 +53,13 @@ are welcome!
 You can enable some debugging messages by commenting out the following line in
 the `include/readspec.hrl` file:
 
-    ````
     -define(DEBUG(IOString, Args), ok).
-    ````
 
 and uncommenting the following one:
 
-    ````
     -define(DEBUG(IOString, Args), io:format(IOString, Args)).
-    ````
 
 You can slightly alter the output format (i.e. line length) by modifying the
 `PRETTYPR_OPTIONS` macro in that same file.
 
-    ````
     -define(PRETTYPR_OPTIONS, [{encoding, utf8}, {paper, 120}, {ribbon, 120}]).
-    ````
