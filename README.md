@@ -21,10 +21,10 @@ in the `priv` folder.
    This module contains a property to test the `delete` operation of the `lists`
    module. By running:
 
-
+   ````
     cd(priv).
     readspec:suite(simple_eqc, prop_simple).
-
+   ````
 
    you will get a `?MODULE.feature` file with some samples of test cases that
    QuickCheck would run when testing the property, written in human-readable,
