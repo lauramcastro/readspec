@@ -63,9 +63,13 @@ extract_module_description(ModelModule) ->
     module = XML#xmlElement.name,
     Descriptions = lists:flatten([ Element#xmlElement.content || Element <- XML#xmlElement.content,
 								 Element#xmlElement.name == description ]),
-    [FullDescription] = lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
-								      Element#xmlElement.name == fullDescription ]),
-    FullDescription#xmlText.value.
+    case lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
+						       Element#xmlElement.name == fullDescription ]) of
+	[] -> % there was no general edoc section for module
+	    [];
+	[FullDescription] ->
+	    FullDescription#xmlText.value
+    end.
 
 
 extract_function_description(ModelModule, Function) ->
@@ -82,9 +86,13 @@ extract_function_description(ModelModule, Function) ->
     function = FunctionDescription#xmlElement.name,
     Descriptions = lists:flatten([ Element#xmlElement.content || Element <- FunctionDescription#xmlElement.content,
 								 Element#xmlElement.name == description ]),
-    [FullDescription] = lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
-								      Element#xmlElement.name == fullDescription ]),
-    FullDescription#xmlText.value.
+    case lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
+						       Element#xmlElement.name == fullDescription ]) of
+	[] -> % there was no edoc description for function
+	    [];
+	[FullDescription] ->
+	    FullDescription#xmlText.value
+    end.
 
 get_xml_version(Module) ->
     FileName = erlang:atom_to_list(Module) ++ ".erl",
