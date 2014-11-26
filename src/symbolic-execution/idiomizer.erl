@@ -253,8 +253,8 @@ check_match_just_once(Tuple, _, ETD, _, _) ->
 %%% did not match. If the template produces an exception while matching
 %%% this is also considered a <code>no_match</code>.
 %%% @see replace_vars/3
--spec extract_vars(reference(), Template :: any(), Target :: any(), Dict :: dict()) ->
-			  {'match', dict()} | {'no_match', Err :: any()}.
+-spec extract_vars(reference(), Template :: any(), Target :: any(), Dict :: dict:dict()) ->
+			  {'match', dict:dict()} | {'no_match', Err :: any()}.
 extract_vars(Ref, Template, Target, Dict) ->
     try extract_vars({Template, Target}, {Ref, Dict}) of
 	{_, Result} -> {match, Result}
@@ -331,7 +331,7 @@ replace_mapper(Ref, Dict) ->
 %%% @return the element generated from the template
 %%% @throws {unbound_variable, term()}
 %%% @see extract_vars/4
--spec replace_vars(Ref :: reference(), Dict :: dict(), Template :: any()) -> any().
+-spec replace_vars(Ref :: reference(), Dict :: dict:dict(), Template :: any()) -> any().
 replace_vars(Ref, Dict, Element) ->
     F = replace_mapper(Ref, Dict),
     F(Element).
