@@ -6,7 +6,9 @@ readSpec
 ### dependencies
 
 In order to use `readSpec` you need a [Quviq QuickCheck](http://www.quviq.com)
-licence.
+licence. The `ci` branch of this repository is integrated with [QuickCheck-CI](http://quickcheck-ci.com).
+
+[<img src="http://quickcheck-ci.com/p/lauramcastro/readspec.png" alt="Build Status" width="160px">](http://quickcheck-ci.com/p/lauramcastro/readspec#ci)
 
 ### compiling & running
 
