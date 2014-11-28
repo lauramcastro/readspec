@@ -16,7 +16,12 @@ clean:
 docs:
 	@$(REBAR) doc
  
-test:
+tests: eunit qc
+
+eunit:
 	@rm -rf .eunit
-	@mkdir -p .eunit
 	@$(REBAR) eunit
+
+qc:
+	@rm -rf .qc
+	@$(REBAR) qc
