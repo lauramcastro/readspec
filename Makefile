@@ -25,3 +25,6 @@ eunit:
 qc:
 	@rm -rf .qc
 	@$(REBAR) qc
+
+qc-ci:
+	@$(REBAR) -C rebar_eqc-ci.config compile
