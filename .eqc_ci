@@ -1,4 +1,4 @@
-{build, "make"}.
+{build, "make tests"}.
 {test_path, "ebin"}.
 {test_root, "test"}.
 
