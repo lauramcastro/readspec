@@ -71,6 +71,14 @@ cucumberise_teststeps_aux(Module, Property, [], CucumberisedTestSteps) ->
 cucumberise_teststeps_aux(Module, Property, Values, []) when is_tuple(Values) ->
     erl_syntax:form_list(cucumberise(Module, Property,
 				     {scenario, Values}));
+% === TODO: refactor these
+cucumberise_teststeps_aux(Module, Property, Value, []) when is_integer(Value) ->
+    erl_syntax:form_list(cucumberise(Module, Property,
+				     {scenario, Value}));
+cucumberise_teststeps_aux(Module, Property, Value, []) when is_atom(Value) ->
+    erl_syntax:form_list(cucumberise(Module, Property,
+				     {scenario, Value}));
+% === ==== ==== ====
 % test steps for QC state machines
 cucumberise_teststeps_aux(Module, Property, [{set,_,Call={call,_Module,_Function,_Args}} | MoreSteps], CucumberisedTestSteps) ->
     cucumberise_teststeps_aux(Module, Property, MoreSteps, [Call | CucumberisedTestSteps]).
@@ -82,6 +90,12 @@ cucumberise(_Module, _Property, {scenario, []}) ->
 % cucumberise QC property scenario
 cucumberise(Module, Property, {scenario, Values}) when is_tuple(Values) ->
     explain(Module, Property, Values, []);
+% === TODO: refactor these
+cucumberise(Module, Property, {scenario, Value}) when is_integer(Value) ->
+    explain(Module, Property, Value, []);
+cucumberise(Module, Property, {scenario, Value}) when is_atom(Value) ->
+    explain(Module, Property, Value, []);
+% === ==== ==== ====
 % cucumberise QC state machine scenario
 cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->
     explain(Module, Property, Call, MoreSteps).
@@ -110,6 +124,12 @@ explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
+% === TODO: refactor these
+enumerate_list(Integer) when is_integer(Integer) ->
+    identify(Integer);
+enumerate_list(Atom) when is_atom(Atom) ->
+    identify(Atom);
+% === ==== ==== ====
 enumerate_list(Tuple) when is_tuple(Tuple) ->
     enumerate_list(erlang:tuple_to_list(Tuple));
 enumerate_list(List) when is_list(List) ->
@@ -121,7 +141,7 @@ identify(X) ->
     ASTofX = erl_syntax:abstract(X),
     [erl_syntax:string(?AND), 
      erl_syntax:string(?OPERAND),
-     erl_syntax:string(type_of(X)), %% TODO: check consistency with property definition
+     erl_syntax:string(type_of(X)), % === TODO: check consistency with property definition
      ASTofX,
      erl_syntax:comment(?EMPTY)].
 

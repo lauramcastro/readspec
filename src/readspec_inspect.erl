@@ -34,20 +34,18 @@ property_description(ModelModule, PropertyName) ->
 %% @end
 -spec property_definition(ModelModule :: atom(),
 			  PropertyName :: atom(),
-			  Values :: tuple()) -> PropertyBody :: string().
+			  Values :: any()) -> PropertyBody :: string().
 property_definition(ModelModule, PropertyName, Values) ->
     property_definition(ModelModule, PropertyName, [], Values).
 
 -spec property_definition(ModelModule :: atom(),
 			  PropertyName :: atom(),
 			  Args :: term(),
-			  Values :: tuple()) -> PropertyBody :: string().
+			  Values :: any()) -> PropertyBody :: string().
 property_definition(ModelModule, PropertyName, Arguments, Values) ->
     FullModelModuleName = list_to_atom(atom_to_list(ModelModule) ++ ".erl"),
-    ValuesAsAtoms = [to_atom(Value) || Value <- tuple_to_list(Values)],
     [Exp] = see:scan_func_str_args(FullModelModuleName, PropertyName, Arguments),
-    extract_property_definition(Exp, ValuesAsAtoms).
-
+    extract_property_definition(Exp, values_as_atoms(Values)).
 
 %% @doc Reverses the truth value of a given property (for counterexample explanation).
 %% @end
@@ -102,18 +100,28 @@ get_xml_version(Module) ->
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
 extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
-    [AppDef] = Exp#exp_iface.var_defs,
-    extract_property_definition_aux(AppDef, Values).
+    AppDefs = Exp#exp_iface.var_defs,
+    PropDefs = [extract_property_definition_aux(AppDef, Values) || AppDef <- AppDefs],
+    lists:flatten(PropDefs).
 
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
-    [FunDef] = lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- App#apply.arg_list]),
-    [FunBody] = erl_syntax:clause_body(FunDef),
-    ?DEBUG("Pretty-printing: ~p~n", [{FunBody,replace_values(FunBody, Values)}]),
-    case replace_values(FunBody, Values) of
-	{op,_,'not',Property} ->
-	    erl_prettypr:format(Property) ++ ?ISFALSE;
-	Property ->
-	    erl_prettypr:format(Property)
+    case lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- App#apply.arg_list]) of
+	[] ->
+	    FunDef = erl_syntax:application(erl_syntax:module_qualifier(erl_syntax:atom(App#apply.module),
+									erl_syntax:operator(App#apply.call)),
+					    App#apply.arg_list),
+	    %% TODO: replace values in FunDef
+	    ?DEBUG("Pretty-printing: ~p~n", [FunDef]),
+	    erl_prettypr:format(FunDef);
+	[FunDef] ->
+	    [FunBody] = erl_syntax:clause_body(FunDef),
+	    ?DEBUG("Pretty-printing: ~p~n", [{FunBody,replace_values(FunBody, Values)}]),
+	    case replace_values(FunBody, Values) of
+		{op,_,'not',Property} ->
+		    erl_prettypr:format(Property) ++ ?ISFALSE;
+		Property ->
+		    erl_prettypr:format(Property)
+	    end
     end.
 
 replace_values(Exp, Values) ->
@@ -128,7 +136,7 @@ transverse_exp({var,N,Name}, [Value|MoreValues], UsedValues) when is_atom(Name) 
 	    {{var,N,UsedValue}, [Value|MoreValues], UsedValues}
     end;
 transverse_exp(Exp, Values, UsedValues) when is_tuple(Exp) ->
-    ExpList = tuple_to_list(Exp),
+    ExpList = erlang:tuple_to_list(Exp),
     {NewExpList, LessValues, MoreUsedValues} = transverse_exp(ExpList, Values, UsedValues),
     {list_to_tuple(NewExpList), LessValues, MoreUsedValues};
 transverse_exp(Exp, Values, UsedValues) when is_list(Exp) ->
@@ -165,6 +173,13 @@ falsify_aux(TermList) when is_list(TermList) ->
 falsify_aux(Other) ->	
     Other.
 
+values_as_atoms(Value) when is_atom(Value) ->
+    Value;
+values_as_atoms(Value) when is_integer(Value) ->
+    to_atom(Value);
+values_as_atoms(Values) when is_tuple(Values) ->
+    [to_atom(Value) || Value <- erlang:tuple_to_list(Values)].
+
 to_atom(Term) when is_integer(Term) ->
     list_to_atom(to_list(Term));
 to_atom([]) ->
@@ -175,3 +190,4 @@ to_atom(Term) when is_list(Term) ->
 
 to_list(Term) when is_integer(Term) ->
     integer_to_list(Term).
+
