@@ -78,6 +78,9 @@ cucumberise_teststeps_aux(Module, Property, Value, []) when is_integer(Value) ->
 cucumberise_teststeps_aux(Module, Property, Value, []) when is_atom(Value) ->
     erl_syntax:form_list(cucumberise(Module, Property,
 				     {scenario, Value}));
+cucumberise_teststeps_aux(Module, Property, Values, []) when is_list(Values) ->
+    erl_syntax:form_list(cucumberise(Module, Property,
+				     {scenario, Values}));
 % === ==== ==== ====
 % test steps for QC state machines
 cucumberise_teststeps_aux(Module, Property, [{set,_,Call={call,_Module,_Function,_Args}} | MoreSteps], CucumberisedTestSteps) ->
@@ -95,6 +98,8 @@ cucumberise(Module, Property, {scenario, Value}) when is_integer(Value) ->
     explain(Module, Property, Value, []);
 cucumberise(Module, Property, {scenario, Value}) when is_atom(Value) ->
     explain(Module, Property, Value, []);
+cucumberise(Module, Property, {scenario, Values}) when is_list(Values) ->
+    explain(Module, Property, Values, []);
 % === ==== ==== ====
 % cucumberise QC state machine scenario
 cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->

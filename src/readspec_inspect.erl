@@ -43,7 +43,7 @@ property_definition(ModelModule, PropertyName, Values) ->
 			  Args :: term(),
 			  Values :: any()) -> PropertyBody :: string().
 property_definition(ModelModule, PropertyName, Arguments, Values) ->
-    FullModelModuleName = list_to_atom(atom_to_list(ModelModule) ++ ".erl"),
+    FullModelModuleName = erlang:list_to_atom(erlang:atom_to_list(ModelModule) ++ ".erl"),
     [Exp] = see:scan_func_str_args(FullModelModuleName, PropertyName, Arguments),
     extract_property_definition(Exp, values_as_atoms(Values)).
 
@@ -178,16 +178,35 @@ values_as_atoms(Value) when is_atom(Value) ->
 values_as_atoms(Value) when is_integer(Value) ->
     to_atom(Value);
 values_as_atoms(Values) when is_tuple(Values) ->
-    [to_atom(Value) || Value <- erlang:tuple_to_list(Values)].
+    [to_atom(Value) || Value <- erlang:tuple_to_list(Values)];
+values_as_atoms(Values) when is_list(Values) ->
+    [to_atom(Value) || Value <- Values].
 
 to_atom(Term) when is_integer(Term) ->
-    list_to_atom(to_list(Term));
+    erlang:list_to_atom(to_string(Term));
 to_atom([]) ->
     '[]';
 to_atom(Term) when is_list(Term) ->
-    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_list(T) ++ ","  end, "[", Term),
-    list_to_atom(string:substr(List, 1, length(List)-1) ++ "]").
+    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "[", Term),
+    erlang:list_to_atom(string:substr(List, 1, length(List)-1) ++ "]");
+to_atom(Term) when is_tuple(Term) ->
+    List = lists:foldl(fun(T, AccIn) when is_list(T) ->
+			       case io_lib:printable_unicode_list(T) of
+				   true  -> AccIn ++ T ++ ",";
+				   false -> AccIn ++ to_string(to_atom(T)) ++ "," 
+			       end;
+			  (T, AccIn) ->
+			       AccIn ++ to_string(T) ++ ","
+		       end, "{", erlang:tuple_to_list(Term)),
+    erlang:list_to_atom(string:substr(List, 1, length(List)-1) ++ "}").
 
-to_list(Term) when is_integer(Term) ->
-    integer_to_list(Term).
-
+to_string(Term) when is_atom(Term) ->
+    erlang:atom_to_list(Term);
+to_string(Term) when is_integer(Term) ->
+    erlang:integer_to_list(Term);
+to_string(Term) when is_list(Term) ->
+    Term;
+to_string(Term) when is_tuple(Term) ->
+    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "{", erlang:tuple_to_list(Term)),
+    string:substr(List, 1, length(List)-1) ++ "}".
+    
