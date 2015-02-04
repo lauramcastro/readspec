@@ -189,5 +189,7 @@ trim_lines([$\n, $\n, $n | T]) ->
     [$\n | trim_lines(T)];
 trim_lines([$\n, $\n | T]) ->
     trim_lines(T);
+trim_lines([92, 110 | T]) ->
+    trim_lines(T);
 trim_lines([H|T]) ->
     [H | trim_lines(T)].
