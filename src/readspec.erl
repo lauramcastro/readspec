@@ -16,18 +16,18 @@
 -include("readspec.hrl").
 
 suite(Module, Property) ->
-	suite(Module, Property, 50).
+	suite(Module, Property, ?NUMTESTS).
 
 suite(Module, Property, NumTests) ->
     ?DEBUG("Cover-compiling module: ~p~n", [Module]),
     FeatureFile = erlang:atom_to_list(Module) ++ ".feature",
     {ok, Module} = cover:compile(Module),
-    Suite = eqc_suite:coverage_based(Module,
+    Suite = eqc_suite:coverage_based([Module],
 				     eqc:numtests(NumTests, erlang:apply(Module, Property, []))),
     ?DEBUG("Cucumberising set of test cases: ~p~n", [Suite]),
     ok = file:write_file(FeatureFile,
 			 clean(erl_prettypr:format(cucumberise_suite(Module, Property, eqc_suite:cases(Suite)),
-                                                   ?PRETTYPR_OPTIONS))).
+						   ?PRETTYPR_OPTIONS))).
 
 counterexample(Module, Property, [Counterexample]) ->
     FeatureFile = erlang:atom_to_list(Property) ++ ".counterexample.feature",

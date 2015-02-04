@@ -32,4 +32,5 @@
 -define(ISFALSE, " IS FALSE.").
 -define(ISTRUE,  " IS TRUE.").
 
+-define(NUMTESTS, 100).
 -define(PRETTYPR_OPTIONS, [{encoding, utf8}, {paper, 120}, {ribbon, 120}]).
