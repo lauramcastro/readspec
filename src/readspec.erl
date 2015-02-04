@@ -138,14 +138,13 @@ enumerate_list(Atom) when is_atom(Atom) ->
 enumerate_list(Tuple) when is_tuple(Tuple) ->
     enumerate_list(erlang:tuple_to_list(Tuple));
 enumerate_list(List) when is_list(List) ->
-    L = [identify(X) || X <- List],
+    L = [ [erl_syntax:string(?AND) | identify(X)] || X <- List],
     [_H | T] = lists:flatten(L),
     T.
 
 identify(X) ->
     ASTofX = erl_syntax:abstract(X),
-    [erl_syntax:string(?AND), 
-     erl_syntax:string(?OPERAND),
+    [erl_syntax:string(?OPERAND),
      erl_syntax:string(type_of(X)), % === TODO: check consistency with property definition
      ASTofX,
      erl_syntax:comment(?EMPTY)].
