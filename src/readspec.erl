@@ -107,10 +107,10 @@ cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->
 
 
 explain(_Module, _Property, {call,_,Function,Args}, MoreSteps) ->
-    "GIVEN " ++ enumerate_list([Args]) ++
-	" WHEN " ++ io_lib:fwrite("~p", [Function]) ++
+    ?GIVEN ++ enumerate_list([Args]) ++
+	?WHEN ++ io_lib:fwrite("~p", [Function]) ++
 	explain_also(MoreSteps) ++
-	" THEN ** insert property postcondition here ** ";
+	?THEN  ++ "** insert property postcondition here ** ";
 explain(Module, Property, Values, []) ->
     [erl_syntax:comment(?EMPTY),
      erl_syntax:string(?GIVEN),
@@ -123,7 +123,7 @@ explain(Module, Property, Values, []) ->
 explain_also([]) ->
     "";
 explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
-    " AND " ++ io_lib:fwrite("~p", [Function]) ++
+    " " ++ ?AND ++ io_lib:fwrite("~p", [Function]) ++
 	explain_also(MoreSteps).
 
 
@@ -189,7 +189,13 @@ trim_lines([$\n, $\n, $n | T]) ->
     [$\n | trim_lines(T)];
 trim_lines([$\n, $\n | T]) ->
     trim_lines(T);
-trim_lines([92, 110 | T]) ->
+trim_lines([$\t | T]) ->
+    [32 | trim_lines(T)];
+trim_lines([92, 110 | T]) -> % escaped newline
     trim_lines(T);
+trim_lines([92, 116 | T]) -> % escaped tab
+    trim_lines(T);
+trim_lines([32, 32 | T]) -> % multiple whitespaces
+    trim_lines([32 | T]);
 trim_lines([H|T]) ->
     [H | trim_lines(T)].
