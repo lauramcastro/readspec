@@ -761,6 +761,8 @@ explain_ast(atom, AST, _Idioms, _Tab) ->
     io_lib:format("the literal '~s'", [erl_prettypr:format(AST)]);
 explain_ast(integer, AST, _Idioms, _Tab) ->
     io_lib:format("the number '~B'", [erl_syntax:integer_value(AST)]);
+explain_ast(string, AST, _Idioms, _Tab) ->
+    io_lib:format("the string \"~s\"", [erl_syntax:string_value(AST)]);
 explain_ast(variable, AST, Idioms, _Tab) ->
     io_lib:format("~s", [get_idiom_or_varname(erl_syntax:variable_name(AST), Idioms)]);
 explain_ast(record_expr, AST, Idioms, Tab) ->
@@ -783,7 +785,7 @@ explain_ast(record_expr, AST, Idioms, Tab) ->
 	    end
 	    || Field <- RecordFields];
 explain_ast(_Type, AST, _Idioms, _Tab) ->
-    throw({thing, _Type}),
+%    throw({thing, _Type}),
     io_lib:format("the erlang term: ~s", [erl_prettypr:format(AST)]).
 
 marginate(NumSpaces) ->
