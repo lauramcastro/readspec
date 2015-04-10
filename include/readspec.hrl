@@ -28,6 +28,7 @@
 -define(LIST,    "the list ").
 -define(TUPLE,   "the tuple ").
 -define(UNKNOWN, "the input value ").
+-define(ALIAS,   "THAT I REFER TO THESE AS ").
 
 -define(ISFALSE, " IS FALSE.").
 -define(ISTRUE,  " IS TRUE.").

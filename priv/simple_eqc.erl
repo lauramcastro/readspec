@@ -15,5 +15,6 @@
 %% @end
 -spec prop_simple() -> boolean().
 prop_simple() ->
-	?FORALL({I, L}, {int(), list(int())},
-			not lists:member(I, lists:delete(I, L))).
+    ?FORALL(I, int(),
+	?FORALL(L, list(int()),
+	    not lists:member(I, lists:delete(I, L)))).

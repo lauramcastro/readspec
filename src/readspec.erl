@@ -40,8 +40,10 @@ counterexample(Module, Property, [Counterexample]) ->
 %%% -------------------------------------------------------------- %%%
 
 cucumberise_suite(Module, Property, Suite) ->
-    FeatureName = erlang:atom_to_list(Module) -- "_eqc",
+    ModuleStr = erlang:atom_to_list(Module),
+    FeatureName = try string:substr(ModuleStr, 1, string:str(ModuleStr, "_eqc")-1) of X -> X catch _:_ -> ModuleStr end,
     Scenarios = cucumberise_testcases(Module, Property, Suite, []),
+%   clean_form(
     erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
 			  erl_syntax:comment(?EMPTY),
 			  erl_syntax:comment(2, [readspec_inspect:model_description(Module)])] ++
@@ -68,10 +70,9 @@ cucumberise_teststeps_aux(Module, Property, [], CucumberisedTestSteps) ->
     erl_syntax:form_list(cucumberise(Module, Property,
 				     {scenario, lists:reverse(CucumberisedTestSteps)}));
 % tests for QC properties
-cucumberise_teststeps_aux(Module, Property, Values, []) when is_tuple(Values) ->
+cucumberise_teststeps_aux(Module, Property, Value, []) when is_tuple(Value) ->
     erl_syntax:form_list(cucumberise(Module, Property,
-				     {scenario, Values}));
-% === TODO: refactor these
+				     {scenario, Value}));
 cucumberise_teststeps_aux(Module, Property, Value, []) when is_integer(Value) ->
     erl_syntax:form_list(cucumberise(Module, Property,
 				     {scenario, Value}));
@@ -91,9 +92,8 @@ cucumberise_teststeps_aux(Module, Property, [{set,_,Call={call,_Module,_Function
 cucumberise(_Module, _Property, {scenario, []}) ->
     erl_syntax:nil();
 % cucumberise QC property scenario
-cucumberise(Module, Property, {scenario, Values}) when is_tuple(Values) ->
-    explain(Module, Property, Values, []);
-% === TODO: refactor these
+cucumberise(Module, Property, {scenario, Value}) when is_tuple(Value) ->
+    explain(Module, Property, Value, []);
 cucumberise(Module, Property, {scenario, Value}) when is_integer(Value) ->
     explain(Module, Property, Value, []);
 cucumberise(Module, Property, {scenario, Value}) when is_atom(Value) ->
@@ -112,11 +112,12 @@ explain(_Module, _Property, {call,_,Function,Args}, MoreSteps) ->
 	explain_also(MoreSteps) ++
 	?THEN  ++ "** insert property postcondition here ** ";
 explain(Module, Property, Values, []) ->
+    {PropertyDefinition, Aliases} = readspec_inspect:property_definition(Module, Property, Values),
+    ?DEBUG("Property definition ~p with aliases ~p~n", [PropertyDefinition, Aliases]),
     [erl_syntax:comment(?EMPTY),
      erl_syntax:string(?GIVEN),
-     erl_syntax:form_list(enumerate_list(Values)),
-     erl_syntax:string(?THEN  ++ 
-			   readspec_inspect:property_definition(Module, Property, Values)),
+     erl_syntax:form_list(enumerate_list(Values, Aliases)),
+     erl_syntax:string(?THEN ++ PropertyDefinition),
      erl_syntax:comment(?EMPTY)].
 
 
@@ -129,18 +130,21 @@ explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
-% === TODO: refactor these
 enumerate_list(Integer) when is_integer(Integer) ->
     identify(Integer);
 enumerate_list(Atom) when is_atom(Atom) ->
     identify(Atom);
-% === ==== ==== ====
 enumerate_list(Tuple) when is_tuple(Tuple) ->
     enumerate_list(erlang:tuple_to_list(Tuple));
 enumerate_list(List) when is_list(List) ->
     L = [ [erl_syntax:string(?AND) | identify(X)] || X <- List],
     [_H | T] = lists:flatten(L),
     T.
+
+enumerate_list(Values, Aliases) ->
+    enumerate_list(Values) ++ lists:flatten([[erl_syntax:string(?AND),
+					      erl_syntax:string(?ALIAS ++ erlang:atom_to_list(Alias)),
+					      erl_syntax:comment(?EMPTY)] || Alias <- Aliases ]).
 
 identify(X) ->
     ASTofX = erl_syntax:abstract(X),
@@ -171,8 +175,9 @@ is_string(X) ->
     is_list(X) andalso lists:all(fun(C) -> is_char(C) end, X).
 
 is_char(C) when is_integer(C) ->
-    ((32 =< C) andalso (C =< 126)) orelse ((161 =< C) andalso (C =< 255)).
-
+    ((32 =< C) andalso (C =< 126)) orelse ((161 =< C) andalso (C =< 255));
+is_char(_C) ->
+    false.
 
 clean(StringStream) ->
     trim_lines(lists:filter(fun($") -> false;
@@ -196,5 +201,9 @@ trim_lines([92, 116 | T]) -> % escaped tab
     trim_lines(T);
 trim_lines([32, 32 | T]) -> % multiple whitespaces
     trim_lines([32 | T]);
+trim_lines([$b,$e,$g,$i,$n | T]) ->
+    trim_lines(T);
+trim_lines([$e,$n,$d | T]) ->
+    trim_lines(T);
 trim_lines([H|T]) ->
     [H | trim_lines(T)].

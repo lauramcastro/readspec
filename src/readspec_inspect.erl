@@ -34,18 +34,18 @@ property_description(ModelModule, PropertyName) ->
 %% @end
 -spec property_definition(ModelModule :: atom(),
 			  PropertyName :: atom(),
-			  Values :: any()) -> PropertyBody :: string().
+			  Values :: [any()]) -> {PropertyBody :: string(), Aliases :: [atom()]}.
 property_definition(ModelModule, PropertyName, Values) ->
     property_definition(ModelModule, PropertyName, [], Values).
 
 -spec property_definition(ModelModule :: atom(),
 			  PropertyName :: atom(),
 			  Args :: term(),
-			  Values :: any()) -> PropertyBody :: string().
+			  Values :: [any()]) -> {PropertyBody :: string(), Aliases :: [atom()]}.
 property_definition(ModelModule, PropertyName, Arguments, Values) ->
     FullModelModuleName = erlang:list_to_atom(erlang:atom_to_list(ModelModule) ++ ".erl"),
     [Exp] = see:scan_func_str_args(FullModelModuleName, PropertyName, Arguments),
-    extract_property_definition(Exp, values_as_atoms(Values)).
+    extract_property_definition(Exp, Values).
 
 %% @doc Reverses the truth value of a given property (for counterexample explanation).
 %% @end
@@ -102,54 +102,66 @@ get_xml_version(Module) ->
 extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
     AppDefs = Exp#exp_iface.var_defs,
     PropDefs = [extract_property_definition_aux(AppDef, Values) || AppDef <- AppDefs],
-    lists:flatten(PropDefs).
+    lists:foldl(fun({Prop, Alias}, {ListofProp, ListofAlias}) ->
+			{Prop ++ ListofProp, Alias ++ ListofAlias}
+		end, {[], []}, PropDefs).
 
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
-    case lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- App#apply.arg_list]) of
-	[] ->
-	    FunDef = erl_syntax:application(erl_syntax:module_qualifier(erl_syntax:atom(App#apply.module),
-									erl_syntax:operator(App#apply.call)),
-					    App#apply.arg_list),
-	    %% TODO: replace values in FunDef
-	    ?DEBUG("Pretty-printing: ~p~n", [FunDef]),
-	    erl_prettypr:format(FunDef);
-	[FunDef] ->
-	    [FunBody] = erl_syntax:clause_body(FunDef),
-	    ?DEBUG("Pretty-printing: ~p~n", [{FunBody,replace_values(FunBody, Values)}]),
-	    case replace_values(FunBody, Values) of
-		{op,_,'not',Property} ->
-		    erl_prettypr:format(Property) ++ ?ISFALSE;
-		Property ->
-		    erl_prettypr:format(Property)
-	    end
+    {FunBody, NValues} = extract_property_body(App#apply.arg_list),
+    {Prop,As} = replace_values(FunBody, Values, NValues),
+    ?DEBUG("Replacing ~p (as ~p) in ~p got ~p (and ~p)~n", [Values, NValues, FunBody, Prop, As]),
+    case {Prop,As} of
+	{{op,_,'not',Property},Aliases} ->
+	    try erl_prettypr:format(Property) of X -> {X ++ ?ISFALSE, []}
+	    catch _:_ -> {erl_prettypr:format(FunBody) ++ ?ISFALSE, Aliases} end;
+	{Property, Aliases} ->
+	    try erl_prettypr:format(Property) of X -> {X,[]}
+	    catch _:_ -> {erl_prettypr:format(FunBody),Aliases} end
     end.
 
-replace_values(Exp, Values) ->
-    {NewExp,_NotBindedValues,_BindedValues} = transverse_exp(Exp, Values, []),
-    NewExp.
+extract_property_body(Property) ->
+    extract_property_body_aux(Property, 0).
 
-transverse_exp({var,N,Name}, [Value|MoreValues], UsedValues) when is_atom(Name) ->
+extract_property_body_aux({call,_,_,CallBody}, N) ->
+    extract_property_body_aux(CallBody, N);
+extract_property_body_aux(BodyTree, N) when is_list(BodyTree) ->
+    case lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- BodyTree]) of
+	[]                        -> {[], N};
+	[{clause,_,_,_,[Clause]}] -> extract_property_body_aux(Clause, N+1)
+    end;
+extract_property_body_aux(Body, N) ->
+    {Body, N}.
+
+
+replace_values(Exp, Values, NValues) ->
+    {NewExp,_NotBindedValues,_N,BindedValues} = transverse_exp(Exp, Values, NValues, []),
+    Aliases = [VarName || {VarName,_Value} <- BindedValues],
+    {NewExp,Aliases}.
+
+transverse_exp({var,N,Name}, Values, NValues, UsedValues) when is_atom(Name) ->
     case lists:keyfind(Name, 1, UsedValues) of
 	false ->
-	    {{var,N,Value}, MoreValues, [{Name,Value}|UsedValues]};
+	    {Value, MoreValues} = pick(Values, NValues),
+	    NewValue = values_as_atoms(Value),
+	    {{var,N,NewValue}, MoreValues, NValues-1, [{Name,NewValue}|UsedValues]};
 	{Name,UsedValue} ->
-	    {{var,N,UsedValue}, [Value|MoreValues], UsedValues}
+	    {{var,N,UsedValue}, Values, NValues, UsedValues}
     end;
-transverse_exp(Exp, Values, UsedValues) when is_tuple(Exp) ->
+transverse_exp(Exp, Values, NValues, UsedValues) when is_tuple(Exp) ->
     ExpList = erlang:tuple_to_list(Exp),
-    {NewExpList, LessValues, MoreUsedValues} = transverse_exp(ExpList, Values, UsedValues),
-    {list_to_tuple(NewExpList), LessValues, MoreUsedValues};
-transverse_exp(Exp, Values, UsedValues) when is_list(Exp) ->
-    lists:foldl(fun(Member, {RExp, Vs, UVs}) ->
-			case transverse_exp(Member, Vs, UVs) of
-			    {{var,N,Value}, MoreValues, MoreUsedValues} ->
-				{RExp++[{var,N,Value}], MoreValues, MoreUsedValues};
-			    {Other, MoreVs, MoreUsedVs} ->
-				{RExp++[Other], MoreVs, MoreUsedVs}
+    {NewExpList, LessValues, RestNValues, MoreUsedValues} = transverse_exp(ExpList, Values, NValues, UsedValues),
+    {list_to_tuple(NewExpList), LessValues, RestNValues, MoreUsedValues};
+transverse_exp(Exp, Values, NValues, UsedValues) when is_list(Exp) ->
+    lists:foldl(fun(Member, {RExp, Vs, NVs, UVs}) ->
+			case transverse_exp(Member, Vs, NVs, UVs) of
+			    {{var,N,Value}, MoreValues, RestNValues, MoreUsedValues} ->
+				{RExp++[{var,N,Value}], MoreValues, RestNValues, MoreUsedValues};
+			    {Other, MoreVs, NVals, MoreUsedVs} ->
+				{RExp++[Other], MoreVs, NVals, MoreUsedVs}
 			end
-		end, {[], Values, UsedValues}, Exp);
-transverse_exp(Exp, Values, UsedValues) ->
-    {Exp, Values, UsedValues}.
+		end, {[], Values, NValues, UsedValues}, Exp);
+transverse_exp(Exp, Values, NValues, UsedValues) ->
+    {Exp, Values, NValues, UsedValues}.
 
 
 falsify_aux({tree,form_list,Attributes,List}) ->
@@ -173,40 +185,40 @@ falsify_aux(TermList) when is_list(TermList) ->
 falsify_aux(Other) ->	
     Other.
 
+pick([Value], 1) ->
+    {Value,[]};
+pick(Value, 1) ->
+    {Value,[]};
+pick(Values,_) when is_tuple(Values) ->
+    [H|T]=erlang:tuple_to_list(Values),
+    {H,erlang:list_to_tuple(T)};
+pick(Values,_) when is_list(Values) ->
+    [H|T]=Values,
+    {H,T}.
+
+values_as_atoms([]) ->
+    '[]';
 values_as_atoms(Value) when is_atom(Value) ->
     Value;
 values_as_atoms(Value) when is_integer(Value) ->
-    to_atom(Value);
-values_as_atoms(Values) when is_tuple(Values) ->
-    [to_atom(Value) || Value <- erlang:tuple_to_list(Values)];
-values_as_atoms(Values) when is_list(Values) ->
-    [to_atom(Value) || Value <- Values].
+    erlang:list_to_atom(to_string(Value));
+values_as_atoms(Value) when is_tuple(Value) ->
+    list_to_tuple([values_as_atoms(V) || V <- erlang:tuple_to_list(Value)]);
+values_as_atoms(Value) when is_list(Value) ->
+    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "[", Value),
+    String = string:substr(List, 1, length(List)-1) ++ "]",
+    try erlang:list_to_atom(String) of X -> X catch _:_ -> [values_as_atoms(V) || V <- Value] end.
 
-to_atom(Term) when is_integer(Term) ->
-    erlang:list_to_atom(to_string(Term));
-to_atom([]) ->
-    '[]';
-to_atom(Term) when is_list(Term) ->
-    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "[", Term),
-    erlang:list_to_atom(string:substr(List, 1, length(List)-1) ++ "]");
-to_atom(Term) when is_tuple(Term) ->
-    List = lists:foldl(fun(T, AccIn) when is_list(T) ->
-			       case io_lib:printable_unicode_list(T) of
-				   true  -> AccIn ++ T ++ ",";
-				   false -> AccIn ++ to_string(to_atom(T)) ++ "," 
-			       end;
-			  (T, AccIn) ->
-			       AccIn ++ to_string(T) ++ ","
-		       end, "{", erlang:tuple_to_list(Term)),
-    erlang:list_to_atom(string:substr(List, 1, length(List)-1) ++ "}").
 
 to_string(Term) when is_atom(Term) ->
     erlang:atom_to_list(Term);
 to_string(Term) when is_integer(Term) ->
     erlang:integer_to_list(Term);
 to_string(Term) when is_list(Term) ->
-    Term;
+    case io_lib:printable_unicode_list(Term) of
+	true  -> Term;
+ 	false -> lists:flatten([ to_string(T) || T <- Term])
+    end;
 to_string(Term) when is_tuple(Term) ->
     List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "{", erlang:tuple_to_list(Term)),
     string:substr(List, 1, length(List)-1) ++ "}".
-    
