@@ -35,3 +35,4 @@
 
 -define(NUMTESTS, 100).
 -define(PRETTYPR_OPTIONS, [{encoding, utf8}, {paper, 120}, {ribbon, 120}]).
+-define(DECIMALS, 16).

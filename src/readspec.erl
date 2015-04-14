@@ -43,7 +43,6 @@ cucumberise_suite(Module, Property, Suite) ->
     ModuleStr = erlang:atom_to_list(Module),
     FeatureName = try string:substr(ModuleStr, 1, string:str(ModuleStr, "_eqc")-1) of X -> X catch _:_ -> ModuleStr end,
     Scenarios = cucumberise_testcases(Module, Property, Suite, []),
-%   clean_form(
     erl_syntax:form_list([erl_syntax:string(?FEATURE ++ FeatureName),
 			  erl_syntax:comment(?EMPTY),
 			  erl_syntax:comment(2, [readspec_inspect:model_description(Module)])] ++
@@ -52,7 +51,7 @@ cucumberise_suite(Module, Property, Suite) ->
 						     erl_syntax:string(?SCENARIO ++
 									   readspec_inspect:property_description(Module, Property)),
 						     Scenario,
-						     erl_syntax:comment(?EMPTY)]) || Scenario <- Scenarios ] ).
+						     erl_syntax:comment(?EMPTY)]) || Scenario <- Scenarios, Scenario =/= [] ]).
 
 
 cucumberise_testcases(_Module, _Property, [], CucumberisedTestCases) ->
@@ -66,6 +65,8 @@ cucumberise_teststeps(Module, Property, [TestCase]) ->
 cucumberise_teststeps(Module, Property, TestCase) ->
     cucumberise_teststeps_aux(Module, Property, TestCase, []).
 
+cucumberise_teststeps_aux(_Module, _Property, [], []) ->
+    [];
 cucumberise_teststeps_aux(Module, Property, [], CucumberisedTestSteps) ->
     erl_syntax:form_list(cucumberise(Module, Property,
 				     {scenario, lists:reverse(CucumberisedTestSteps)}));
@@ -90,7 +91,7 @@ cucumberise_teststeps_aux(Module, Property, [{set,_,Call={call,_Module,_Function
 
 % we remove spureous cases such as {scenario, []}
 cucumberise(_Module, _Property, {scenario, []}) ->
-    erl_syntax:nil();
+    [];
 % cucumberise QC property scenario
 cucumberise(Module, Property, {scenario, Value}) when is_tuple(Value) ->
     explain(Module, Property, Value, []);
@@ -107,16 +108,16 @@ cucumberise(Module, Property, {scenario, [Call={call,_,_,_} | MoreSteps]}) ->
 
 
 explain(_Module, _Property, {call,_,Function,Args}, MoreSteps) ->
-    ?GIVEN ++ enumerate_list([Args]) ++
+    ?GIVEN ++ enumerate_list([Args], length(Args)) ++
 	?WHEN ++ io_lib:fwrite("~p", [Function]) ++
 	explain_also(MoreSteps) ++
 	?THEN  ++ "** insert property postcondition here ** ";
 explain(Module, Property, Values, []) ->
-    {PropertyDefinition, Aliases} = readspec_inspect:property_definition(Module, Property, Values),
-    ?DEBUG("Property definition ~p with aliases ~p~n", [PropertyDefinition, Aliases]),
+    {PropertyDefinition, NValues, Aliases} = readspec_inspect:property_definition(Module, Property, Values),
+    ?DEBUG("Property definition ~p with ~p values of aliases ~p~n", [PropertyDefinition, NValues, Aliases]),
     [erl_syntax:comment(?EMPTY),
      erl_syntax:string(?GIVEN),
-     erl_syntax:form_list(enumerate_list(Values, Aliases)),
+     erl_syntax:form_list(enumerate_list(Values, NValues, Aliases)),
      erl_syntax:string(?THEN ++ PropertyDefinition),
      erl_syntax:comment(?EMPTY)].
 
@@ -130,21 +131,26 @@ explain_also([{call,_Module,Function,_ArgsNotUsedRightNow} | MoreSteps]) ->
 
 % ----- ----- ----- ----- ----- -----  ----- ----- ----- ----- ----- %
 
-enumerate_list(Integer) when is_integer(Integer) ->
+enumerate_list(Integer, 1) when is_integer(Integer) ->
     identify(Integer);
-enumerate_list(Atom) when is_atom(Atom) ->
+enumerate_list(Atom, 1) when is_atom(Atom) ->
     identify(Atom);
-enumerate_list(Tuple) when is_tuple(Tuple) ->
-    enumerate_list(erlang:tuple_to_list(Tuple));
-enumerate_list(List) when is_list(List) ->
+enumerate_list(Tuple, N) when is_tuple(Tuple) ->
+    enumerate_list(erlang:tuple_to_list(Tuple), N);
+enumerate_list(List, 1) when is_list(List) ->
+    identify(List);
+enumerate_list(List, _N) when is_list(List) -> % TODO: sanity check is N = length(List)
     L = [ [erl_syntax:string(?AND) | identify(X)] || X <- List],
     [_H | T] = lists:flatten(L),
     T.
 
-enumerate_list(Values, Aliases) ->
-    enumerate_list(Values) ++ lists:flatten([[erl_syntax:string(?AND),
-					      erl_syntax:string(?ALIAS ++ erlang:atom_to_list(Alias)),
-					      erl_syntax:comment(?EMPTY)] || Alias <- Aliases ]).
+enumerate_list(Values, NValues, []) ->
+    enumerate_list(Values, NValues);
+enumerate_list(Values, NValues, Aliases) ->
+    enumerate_list(Values, NValues) ++ [ erl_syntax:string(?AND),
+				         erl_syntax:string(?ALIAS) ] ++ 
+	[ erl_syntax:string(erlang:atom_to_list(Alias) ++ ", ") || Alias <- Aliases ] ++
+	[ erl_syntax:comment(?EMPTY) ].
 
 identify(X) ->
     ASTofX = erl_syntax:abstract(X),
@@ -198,7 +204,7 @@ trim_lines([$\t | T]) ->
 trim_lines([92, 110 | T]) -> % escaped newline
     trim_lines(T);
 trim_lines([92, 116 | T]) -> % escaped tab
-    trim_lines(T);
+    trim_lines([32 | T]);
 trim_lines([32, 32 | T]) -> % multiple whitespaces
     trim_lines([32 | T]);
 trim_lines([$b,$e,$g,$i,$n | T]) ->
