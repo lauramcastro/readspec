@@ -141,6 +141,8 @@ extract_property_body_aux(Body, N) ->
     {Body, N}.
 
 
+replace_values([], _, _) ->
+    {[],[]};
 replace_values(Exp, Values, NValues) ->
     {NewExp,_NotBindedValues=[],_N,BindedValues} = transverse_exp(Exp, Values, NValues, []),
     BindedAliases = [VarName || {VarName,VarValue} <- BindedValues, VarName =/= VarValue],
@@ -167,6 +169,9 @@ transverse_exp(Exp, Values, NValues, UsedValues) when is_tuple(Exp) ->
     {list_to_tuple(NewExpList), LessValues, RestNValues, MoreUsedValues};
 transverse_exp(Exp=[{atom,_,throw},{var,_,Name},{var,_,_}], Values, NValues, UsedValues) ->
     {Exp, Values, NValues, [{Name,Name}|UsedValues]};
+transverse_exp([{atom,X,throw},{tuple,Y,RestExp},{var,_,_}], Values, NValues, UsedValues) ->
+    {NewExp, LessValues, RestNValues, MoreUsedValues} = transverse_exp(RestExp, Values, NValues, UsedValues),
+    {[{atom,X,throw},{tuple,Y,NewExp}], LessValues, RestNValues, MoreUsedValues};
 transverse_exp(Exp, Values, NValues, UsedValues) when is_list(Exp) ->
     ?DEBUG("Transversing ~p element by element~n", [Exp]),
     lists:foldl(fun(Member, {RExp, Vs, NVs, UVs}) ->
