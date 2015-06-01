@@ -142,7 +142,9 @@ enumerate_list(List, 1) when is_list(List) ->
 enumerate_list(List, _N) when is_list(List) -> % TODO: sanity check is N = length(List)
     L = [ [erl_syntax:string(?AND) | identify(X)] || X <- List],
     [_H | T] = lists:flatten(L),
-    T.
+    T;
+enumerate_list(Other, 0) ->
+    enumerate_list(Other, 1).
 
 enumerate_list(Values, NValues, []) ->
     enumerate_list(Values, NValues);

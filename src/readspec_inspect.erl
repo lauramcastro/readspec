@@ -76,20 +76,24 @@ extract_function_description(ModelModule, Function) ->
     module = XML#xmlElement.name,
     Functions = lists:flatten([ Element#xmlElement.content || Element <- XML#xmlElement.content,
 							      Element#xmlElement.name == functions ]),
-    [FunctionDescription] = lists:filter(fun(Element) when is_record(Element, xmlElement) -> 
-						 [] =/= [ Element#xmlElement.content || Attribute <- Element#xmlElement.attributes,
-											Attribute#xmlAttribute.name == name,
-											Attribute#xmlAttribute.value == FunctionName ]
-					 end, Functions),
-    function = FunctionDescription#xmlElement.name,
-    Descriptions = lists:flatten([ Element#xmlElement.content || Element <- FunctionDescription#xmlElement.content,
-								 Element#xmlElement.name == description ]),
-    case lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
-						       Element#xmlElement.name == fullDescription ]) of
+    case lists:filter(fun(Element) when is_record(Element, xmlElement) ->
+			      [] =/= [ Element#xmlElement.content || Attribute <- Element#xmlElement.attributes,
+								     Attribute#xmlAttribute.name == name,
+								     Attribute#xmlAttribute.value == FunctionName ]
+		      end, Functions) of
+	[FunctionDescription] ->
+	    function = FunctionDescription#xmlElement.name,
+	    Descriptions = lists:flatten([ Element#xmlElement.content || Element <- FunctionDescription#xmlElement.content,
+									 Element#xmlElement.name == description ]),
+	    case lists:flatten([ Element#xmlElement.content || Element <- Descriptions,
+							       Element#xmlElement.name == fullDescription ]) of
+		[] -> % there was no edoc description for function
+		    [];
+		[FullDescription] ->
+		    FullDescription#xmlText.value
+	    end;
 	[] -> % there was no edoc description for function
-	    [];
-	[FullDescription] ->
-	    FullDescription#xmlText.value
+	    []
     end.
 
 get_xml_version(Module) ->
@@ -208,6 +212,8 @@ falsify_aux(TermList) when is_list(TermList) ->
 falsify_aux(Other) ->	
     Other.
 
+pick(V, 0) ->
+    pick(V, 1);
 pick([Value], 1) ->
     {Value,[]};
 pick(Value, 1) ->
