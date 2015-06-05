@@ -68,7 +68,7 @@ ppr_callinfos([#call_info{
 
 expand_all_functions([], _, _) -> [];
 expand_all_functions([{Name, ArgNum}|Rest], WildcardRecord, FileName) ->
-    ArgList = erl_syntax:list(generate_arg_list(ArgNum)),
+    ArgList = erl_syntax:list(lists:reverse(generate_arg_list(ArgNum))),
     [#call_info{
 	name = Name, num_args = ArgNum,
 	pre_exp = encapsulated_generate_logical_function(
