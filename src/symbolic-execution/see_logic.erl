@@ -665,6 +665,7 @@ convert_to_list(StringAST) ->
 write_in_terms_of(Sth, Var, Expansion) ->
     write_in_terms_of(erl_syntax:type(Sth), Sth, Var, Expansion).
 
+write_in_terms_of(nil, Nil, Var, Expansion) -> grant_equal(Nil, Var, Expansion);
 write_in_terms_of(atom, Atom, Var, Expansion) -> grant_equal(Atom, Var, Expansion);
 write_in_terms_of(integer, Integer, Var, Expansion) -> grant_equal(Integer, Var, Expansion);
 write_in_terms_of(string, String, Var, Expansion) -> grant_equal(String, Var, Expansion);
