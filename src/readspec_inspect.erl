@@ -253,9 +253,12 @@ to_string(Term) when is_integer(Term) ->
 to_string(Term) when is_float(Term) ->
     erlang:float_to_list(Term, [{decimals,?DECIMALS}, compact]);
 to_string(Term) when is_list(Term) ->
-    case io_lib:printable_unicode_list(Term) of
-	true  -> Term;
- 	false -> lists:flatten(intersperse_comma([ to_string(T) || T <- Term]))
+    case Term of
+	[] -> "[]";
+	_ -> case io_lib:printable_unicode_list(Term) of
+		 true  -> Term;
+		 false -> "[" ++ lists:flatten(intersperse_comma([ to_string(T) || T <- Term])) ++ "]"
+	     end
     end;
 to_string(Term) when is_tuple(Term) ->
     "{" ++ intersperse_comma(erlang:tuple_to_list(Term)) ++ "}".
