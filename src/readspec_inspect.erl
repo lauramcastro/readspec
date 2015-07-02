@@ -255,8 +255,11 @@ to_string(Term) when is_float(Term) ->
 to_string(Term) when is_list(Term) ->
     case io_lib:printable_unicode_list(Term) of
 	true  -> Term;
- 	false -> lists:flatten([ to_string(T) || T <- Term])
+ 	false -> lists:flatten(intersperse_comma([ to_string(T) || T <- Term]))
     end;
 to_string(Term) when is_tuple(Term) ->
-    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ ","  end, "{", erlang:tuple_to_list(Term)),
-    string:substr(List, 1, length(List)-1) ++ "}".
+    "{" ++ intersperse_comma(erlang:tuple_to_list(Term)) ++ "}".
+
+intersperse_comma(Term) ->
+    List = lists:foldl(fun(T, AccIn) -> AccIn ++ to_string(T) ++ "," end, "", Term),
+    string:substr(List, 1, length(List) - 1).
