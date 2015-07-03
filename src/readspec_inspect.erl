@@ -113,7 +113,11 @@ extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
     {FunBody, NValues, PatternList} = extract_property_body(App#apply.arg_list),
 	Res = lists:concat([see_logic:pattern_match(Pat, erl_syntax:abstract(Val), [nestcond:make_expansion()])
-	                    || {Pat, Val} <- lists:zip(lists:reverse(PatternList), Values)]),
+	                    || {Pat, Val} <- lists:zip(lists:reverse(PatternList),
+						       case NValues of
+							   1 -> [Values];
+							   _ -> Values
+						       end)]),
 	DefValues = lists:concat([[{Name, list_to_atom(lists:flatten(erl_prettypr:format(Value)))}
 							   || #apply{name = Name, evaluated = true, value = Value} <- Applies]
                               || #expansion{applys = Applies} <- Res]),
