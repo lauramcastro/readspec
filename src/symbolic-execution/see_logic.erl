@@ -11,7 +11,7 @@
 -module(see_logic).
 
 -export([get_funcs/1, get_record_definitions/1, generate_logical_function/3, expand_function/3,
-	 renamers/2, do_rename/2, parse_args/1, rename_vars_in_model/2]).
+	 renamers/2, do_rename/2, parse_args/1, rename_vars_in_model/2, pattern_match/3]).
 
 -import(nestcond, [make_expansion/0, set_result/2, add_arg_if_not_bound/2,
 		   set_func_patmatcha/2, set_case_patmatcha/2, clear_patmatcha/1,

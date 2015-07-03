@@ -111,9 +111,14 @@ extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
 		end, {[], 0, []}, PropDefs).
 
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
-    {FunBody, NValues} = extract_property_body(App#apply.arg_list),
-    ?DEBUG("Replacing ~p (as ~p) in ~p~n", [Values, NValues, FunBody]),
-    case replace_values(FunBody, Values, NValues) of
+    {FunBody, NValues, PatternList} = extract_property_body(App#apply.arg_list),
+	Res = lists:concat([see_logic:pattern_match(Pat, erl_syntax:abstract(Val), [nestcond:make_expansion()])
+	                    || {Pat, Val} <- lists:zip(lists:reverse(PatternList), Values)]),
+	DefValues = lists:concat([[{Name, list_to_atom(lists:flatten(erl_prettypr:format(Value)))}
+							   || #apply{name = Name, evaluated = true, value = Value} <- Applies]
+                              || #expansion{applys = Applies} <- Res]),
+    ?DEBUG("Replacing ~p (as ~p, with dict ~p) in ~p~n", [Values, NValues, DefValues, FunBody]),
+    case replace_values(FunBody, Values, NValues, DefValues) of
 	{[],_Aliases} ->
 	    FunDef = erl_syntax:application(erl_syntax:module_qualifier(erl_syntax:atom(App#apply.module),
 									erl_syntax:operator(App#apply.call)),
@@ -132,23 +137,23 @@ extract_property_definition_aux(App, Values) when is_record(App, apply) ->
     end.
 
 extract_property_body(Property) ->
-    extract_property_body_aux(Property, 0).
+    extract_property_body_aux(Property, 0, []).
 
-extract_property_body_aux({call,_,_,CallBody}, N) ->
-    extract_property_body_aux(CallBody, N);
-extract_property_body_aux(BodyTree, N) when is_list(BodyTree) ->
+extract_property_body_aux({call,_,_,CallBody}, N, PatternList) ->
+    extract_property_body_aux(CallBody, N, PatternList);
+extract_property_body_aux(BodyTree, N, PatternList) when is_list(BodyTree) ->
     case lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- BodyTree]) of
-	[]                        -> {[], N};
-	[{clause,_,_,_,[Clause]}] -> extract_property_body_aux(Clause, N+1)
+	[]                        -> {[], N, PatternList};
+	[{clause,_,[Pattern],_,[Clause]}] -> extract_property_body_aux(Clause, N+1, [Pattern|PatternList])
+	%[{clause,_,_,_,[Clause]}] -> extract_property_body_aux(Clause, N+1, PatternList)
     end;
-extract_property_body_aux(Body, N) ->
-    {Body, N}.
+extract_property_body_aux(Body, N, PatternList) ->
+    {Body, N, PatternList}.
 
 
-replace_values([], _, _) ->
-    {[],[]};
-replace_values(Exp, Values, NValues) ->
-    {NewExp,_NotBindedValues=[],_N,BindedValues} = transverse_exp(Exp, Values, NValues, []),
+replace_values([], _, _, _) -> {[], []};
+replace_values(Exp, Values, NValues, DefinedValues) ->
+    {NewExp,Values,_N,BindedValues} = transverse_exp(Exp, Values, NValues, DefinedValues),
     BindedAliases = [VarName || {VarName,VarValue} <- BindedValues, VarName =/= VarValue],
     {NewExp,lists:reverse(BindedAliases)}.
 
