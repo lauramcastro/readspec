@@ -110,17 +110,22 @@ extract_property_definition(Exp, Values) when is_record(Exp, exp_iface) ->
 			{Prop ++ ListofProp, NValues+NValuesAcc, Alias ++ ListofAlias}
 		end, {[], 0, []}, PropDefs).
 
+tolerant_zip([], _) -> [];
+tolerant_zip(_, []) -> [];
+tolerant_zip([H1|T1], [H2|T2]) -> [{H1, H2}|tolerant_zip(T1, T2)].
+
 extract_property_definition_aux(App, Values) when is_record(App, apply) ->
     {FunBody, NValues, PatternList} = extract_property_body(App#apply.arg_list),
-	Res = lists:concat([see_logic:pattern_match(Pat, erl_syntax:abstract(Val), [nestcond:make_expansion()])
-	                    || {Pat, Val} <- lists:zip(lists:reverse(PatternList),
-						       case NValues of
-							   1 -> [Values];
-							   _ -> Values
-						       end)]),
-	DefValues = lists:concat([[{Name, list_to_atom(lists:flatten(erl_prettypr:format(Value)))}
-							   || #apply{name = Name, evaluated = true, value = Value} <- Applies]
-                              || #expansion{applys = Applies} <- Res]),
+    Res = lists:concat([see_logic:pattern_match(Pat, erl_syntax:abstract(Val), [nestcond:make_expansion()])
+			|| {Pat, Val} <- tolerant_zip(lists:reverse(PatternList),
+						      case length(PatternList) of
+							  0 -> [];
+							  1 -> [Values];
+							  _ -> Values
+						      end)]),
+    DefValues = lists:concat([[{Name, erl_syntax:concrete(Value)}
+			       || #apply{name = Name, evaluated = true, value = Value} <- Applies]
+			      || #expansion{applys = Applies} <- Res]),
     ?DEBUG("Replacing ~p (as ~p, with dict ~p) in ~p~n", [Values, NValues, DefValues, FunBody]),
     case replace_values(FunBody, Values, NValues, DefValues) of
 	{[],_Aliases} ->
@@ -157,7 +162,7 @@ extract_property_body_aux(Body, N, PatternList) ->
 
 replace_values([], _, _, _) -> {[], []};
 replace_values(Exp, Values, NValues, DefinedValues) ->
-    {NewExp,Values,_N,BindedValues} = transverse_exp(Exp, Values, NValues, DefinedValues),
+    {NewExp,_Values,_N,BindedValues} = transverse_exp(Exp, Values, NValues, DefinedValues),
     BindedAliases = [VarName || {VarName,VarValue} <- BindedValues, VarName =/= VarValue],
     {NewExp,lists:reverse(BindedAliases)}.
 
