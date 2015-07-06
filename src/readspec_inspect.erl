@@ -114,18 +114,19 @@ tolerant_zip([], _) -> [];
 tolerant_zip(_, []) -> [];
 tolerant_zip([H1|T1], [H2|T2]) -> [{H1, H2}|tolerant_zip(T1, T2)].
 
-extract_property_definition_aux(App, Values) when is_record(App, apply) ->
-    {FunBody, NValues, PatternList} = extract_property_body(App#apply.arg_list),
+extract_property_definition_aux(App, ValuesOrValList) when is_record(App, apply) ->
+    {FunBody, _TNValues, PatternList} = extract_property_body(App#apply.arg_list),
+    Values = case length(PatternList) of
+		 0 -> [];
+		 1 -> [ValuesOrValList];
+		 _ -> ValuesOrValList
+	     end,
     Res = lists:concat([see_logic:pattern_match(Pat, erl_syntax:abstract(Val), [nestcond:make_expansion()])
-			|| {Pat, Val} <- tolerant_zip(lists:reverse(PatternList),
-						      case length(PatternList) of
-							  0 -> [];
-							  1 -> [Values];
-							  _ -> Values
-						      end)]),
+			|| {Pat, Val} <- tolerant_zip(lists:reverse(PatternList), Values)]),
     DefValues = lists:concat([[{Name, erl_syntax:concrete(Value)}
 			       || #apply{name = Name, evaluated = true, value = Value} <- Applies]
 			      || #expansion{applys = Applies} <- Res]),
+    NValues = length(DefValues),
     ?DEBUG("Replacing ~p (as ~p, with dict ~p) in ~p~n", [Values, NValues, DefValues, FunBody]),
     case replace_values(FunBody, Values, NValues, DefValues) of
 	{[],_Aliases} ->
@@ -178,7 +179,7 @@ transverse_exp({var,N,Name}, Values, NValues, UsedValues) when is_atom(Name) ->
 	    NewValue = values_as_atoms(Value),
 	    {{var,N,NewValue}, MoreValues, NValues-1, [{Name,NewValue}|UsedValues]};
 	{Name,UsedValue} ->
-	    {{var,N,UsedValue}, Values, NValues, UsedValues}
+	    {{var,N,values_as_atoms(UsedValue)}, Values, NValues, UsedValues}
     end;
 transverse_exp(Exp, Values, NValues, UsedValues) when is_tuple(Exp) ->
     ExpList = erlang:tuple_to_list(Exp),
@@ -270,7 +271,7 @@ to_string(Term) when is_list(Term) ->
     case Term of
 	[] -> "[]";
 	_ -> case io_lib:printable_unicode_list(Term) of
-		 true  -> Term;
+		 true  -> "\"" ++ Term ++ "\"";
 		 false -> "[" ++ lists:flatten(intersperse_comma([ to_string(T) || T <- Term])) ++ "]"
 	     end
     end;
