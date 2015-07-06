@@ -149,13 +149,13 @@ extract_property_definition_aux(App, ValuesOrValList) when is_record(App, apply)
 extract_property_body(Property) ->
     extract_property_body_aux(Property, 0, []).
 
-extract_property_body_aux({call,_,_,CallBody}, N, PatternList) ->
+extract_property_body_aux({call,_, {remote,_,{atom,_,eqc},_}, CallBody}, N, PatternList) ->
     extract_property_body_aux(CallBody, N, PatternList);
 extract_property_body_aux(BodyTree, N, PatternList) when is_list(BodyTree) ->
     case lists:flatten([ Clauses || {'fun',_,{clauses,Clauses}} <- BodyTree]) of
 	[]                        -> {[], N, PatternList};
 	[{clause,_,[Pattern],_,[Clause]}] -> extract_property_body_aux(Clause, N+1, [Pattern|PatternList])
-	%[{clause,_,_,_,[Clause]}] -> extract_property_body_aux(Clause, N+1, PatternList)
+%%	[{clause,_,_,_,[Clause]}] -> extract_property_body_aux(Clause, N+1, PatternList)
     end;
 extract_property_body_aux(Body, N, PatternList) ->
     {Body, N, PatternList}.
